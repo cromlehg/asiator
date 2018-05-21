@@ -29,7 +29,7 @@ class AppController @Inject() (cc: ControllerComponents, dao: DAO, config: Confi
    * a path of `/`.
    */
 
-  def index = Action(Redirect(routes.AppController.status))
+  def index = Action(Redirect(sside.routes.PostsController.posts(1)))
 
   //  def index() = Action { implicit request: Request[AnyContent] =>
   //    Ok(views.html.status())
