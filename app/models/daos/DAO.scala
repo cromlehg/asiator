@@ -1534,7 +1534,10 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
         ConfirmationStatus.WAIT_CONFIRMATION,
         AccountStatus.NORMAL,
         companyNameOpt, None, None, 0, System.currentTimeMillis,
-        Some(BCrypt.hashpw(Random.nextString(5) + login + System.currentTimeMillis.toString, BCrypt.gensalt()).replaceAll("\\.", "s")),
+        Some(BCrypt.hashpw(Random.nextString(5) + login + System.currentTimeMillis.toString, BCrypt.gensalt())
+            .replaceAll("\\.", "s")
+            .replaceAll("\\\\", "d")
+            .replaceAll("\\$", "g")),
         0, 0, 0, 0, 0, 0, 0,
         None,
         accountType)
