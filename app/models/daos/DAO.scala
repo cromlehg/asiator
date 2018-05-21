@@ -1,0 +1,1632 @@
+package models.daos
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.util.Random
+
+import org.mindrot.jbcrypt.BCrypt
+
+import controllers.AppConstants
+import controllers.RewardLogic
+import javax.inject.Inject
+import models.AccountStatus
+import models.CurrencyType
+import models.PostsFilter
+import models.Roles
+import models.TargetType
+import models.TxState
+import models.TxType
+import models.Account
+import models.ConfirmationStatus
+import play.api.db.slick.DatabaseConfigProvider
+import play.api.db.slick.HasDatabaseConfigProvider
+import controllers.AppContext
+import models.ContentType
+import models.BalanceType
+import models.AccountType
+import models.PostType
+import sun.net.ftp.FtpClient.TransferType
+import models.AccountLevel
+
+/**
+ *
+ * Queries with SlickBUG should be replace leftJoin with for comprehesive. Bug:
+ * "Unreachable reference to after resolving monadic joins"
+ *
+ */
+
+// inject this
+// conf: play.api.Configuration,
+// and then get conf value
+// conf.underlying.getString(Utils.meidaPath)
+class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(implicit ec: ExecutionContext)
+  extends DBTableDefinitions with HasDatabaseConfigProvider[slick.jdbc.JdbcProfile] with TraitDTOToModel {
+
+  import profile.api._
+
+  val pageSize = 17
+
+  val maxLikesView = 10
+
+  def getTagsPages(): Future[Int] =
+    db.run(tags.size.result) map pages
+
+  def pages(size: Int): Int = pages(size, pageSize)
+
+  def pages(size: Int, pageSize: Int): Int = {
+    if (size == 0) 0 else {
+      val fSize = size / pageSize
+      if (fSize * pageSize < size) fSize + 1 else fSize
+    }
+  }
+
+  def getNotificationTasksWithEmailAndProduct(pageId: Long): Future[Seq[models.ScheduledTask]] = {
+    val now = System.currentTimeMillis()
+    db.run(scheduledTasks
+      .filter(t => t.taskType === models.TaskType.NOTIFICATIONS && t.executed.isEmpty && t.planned < now)
+      .drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+      .join(accounts).on(_.accountId === _.id)
+      .join(posts).on { case ((task, account), product) => task.productId === product.id }
+      .result) map {
+      _.map {
+        case ((task, account), product) =>
+          val modelTask = taskFrom(task)
+          modelTask.emailOpt = Some(account.email)
+          modelTask.productOpt = Some(postFrom(product))
+          modelTask
+      }
+    }
+  }
+
+  def notificationsSended(ids: Seq[Long]): Future[Int] =
+    db.run(scheduledTasks.filter(_.id inSet ids).map(_.executed).update(Some(System.currentTimeMillis())).transactionally)
+
+  def getNotificationsPages(): Future[Int] = {
+    val now = System.currentTimeMillis()
+    db.run(scheduledTasks
+      .filter(t => t.taskType === models.TaskType.NOTIFICATIONS && t.executed.isEmpty && t.planned < now)
+      .size.result) map pages
+  }
+
+  def getTagsPage(pageId: Long): Future[Seq[models.Tag]] =
+    db.run(tags.sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize).result) map (_ map tagFrom)
+
+  def getAccountsPage(pageId: Long): Future[Seq[models.Account]] =
+    db.run(accounts.sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize).result) map (_ map accountFrom)
+
+  def getAccountsPages(): Future[Int] =
+    db.run(accounts.size.result) map pages
+
+  def findAccountById(id: Long) =
+    getAccountFromQuery(accounts.filter(_.id === id))
+
+  def findAccountByEmail(email: String): Future[Option[Account]] =
+    getAccountFromQuery(accounts.filter(_.email === email))
+
+  def isPostOwner(postId: Long, accountId: Long): Future[Boolean] =
+    db.run(posts.filter(t => t.id === postId && t.ownerId === accountId).exists.result)
+
+  def findAccountByLoginOrEmailWithBalances(loginOrElamil: String): Future[Option[Account]] = {
+    db.run {
+      for {
+        dbaccount <- accounts.filter(u => u.login === loginOrElamil || u.email === loginOrElamil).result.head
+        balanceTokens <- filterCurrentAccountBalanceValue(dbaccount.id, CurrencyType.TOKEN).result.headOption
+        balanceDollars <- filterCurrentAccountBalanceValue(dbaccount.id, CurrencyType.DOLLAR).result.headOption
+        balancePower <- filterCurrentAccountBalanceValue(dbaccount.id, CurrencyType.POWER).result.headOption
+      } yield (dbaccount, balanceTokens, balanceDollars, balancePower)
+    } map {
+      case (dbaccount, balanceTokens, balanceDollars, balancePower) =>
+        val account = accountFrom(dbaccount)
+        account.balanceTokenOpt = balanceTokens
+        account.balanceDollarOpt = balanceDollars
+        account.balancePowerOpt = balancePower
+        Some(account)
+    }
+  }
+
+  def findAccountByLoginOrEmail(loginOrElamil: String): Future[Option[Account]] =
+    getAccountFromQuery(accounts.filter(u => u.login === loginOrElamil || u.email === loginOrElamil))
+
+  def findAccountIdByLoginOrEmail(loginOrElamil: String): Future[Option[Long]] =
+    getAccountFromQuery(accounts.filter(u => u.login === loginOrElamil || u.email === loginOrElamil)).map(_.map(_.id))
+
+  def findAccountByLogin(login: String): Future[Option[Account]] =
+    getAccountFromQuery(accounts.filter(_.login === login))
+
+  def findBalances(pageId: Long): Future[Seq[models.Balance]] =
+    db.run(balances.sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize).result) map (_ map balanceFrom)
+
+  def findAccountByIdWithBalances(id: Long): Future[Option[Account]] = {
+    db.run {
+      for {
+        dbaccount <- accounts.filter(_.id === id).result.head
+        balanceTokens <- filterCurrentAccountBalanceValue(dbaccount.id, CurrencyType.TOKEN).result.headOption
+        balanceDollars <- filterCurrentAccountBalanceValue(dbaccount.id, CurrencyType.DOLLAR).result.headOption
+        balancePower <- filterCurrentAccountBalanceValue(dbaccount.id, CurrencyType.POWER).result.headOption
+      } yield (dbaccount, balanceTokens, balanceDollars, balancePower)
+    } map {
+      case (dbaccount, balanceTokens, balanceDollars, balancePower) =>
+        val account = accountFrom(dbaccount)
+        account.balanceTokenOpt = balanceTokens
+        account.balanceDollarOpt = balanceDollars
+        account.balancePowerOpt = balancePower
+        Some(account)
+    }
+  }
+
+  def findAccountByLoginWithBalances(login: String): Future[Option[Account]] = {
+    db.run {
+      for {
+        dbaccount <- accounts.filter(_.login === login).result.head
+        balanceTokens <- filterCurrentAccountBalanceValue(dbaccount.id, CurrencyType.TOKEN).result.headOption
+        balanceDollars <- filterCurrentAccountBalanceValue(dbaccount.id, CurrencyType.DOLLAR).result.headOption
+        balancePower <- filterCurrentAccountBalanceValue(dbaccount.id, CurrencyType.POWER).result.headOption
+      } yield (dbaccount, balanceTokens, balanceDollars, balancePower)
+    } map {
+      case (dbaccount, balanceTokens, balanceDollars, balancePower) =>
+        val account = accountFrom(dbaccount)
+        account.balanceTokenOpt = balanceTokens
+        account.balanceDollarOpt = balanceDollars
+        account.balancePowerOpt = balancePower
+        Some(account)
+    }
+  }
+
+  def setCommentStatus(commentId: Long, status: Int): Future[Boolean] =
+    db.run(comments.filter(_.id === commentId).map(_.status).update(status).transactionally.map(_ > 0))
+
+  def isAccountOwnerOfComment(accountId: Long, commentId: Long): Future[Boolean] =
+    db.run(comments.filter(t => t.id === commentId && t.ownerId === accountId).exists.result)
+
+  def isLoginExists(login: String): Future[Boolean] =
+    db.run(accounts.filter(t => t.login === login.trim.toLowerCase || t.email === login).exists.result)
+
+  def isEmailExists(email: String): Future[Boolean] =
+    db.run(accounts.filter(_.email === email.trim.toLowerCase).exists.result)
+
+  def findSessionByAccountIdSessionKeyAndIP(userId: Long, ip: String, sessionKey: String): Future[Option[models.Session]] =
+    getSessionFromQuery(sessions.filter(s => s.userId === userId && s.ip === ip && s.sessionKey === sessionKey))
+
+  def findPostWithAccountByPostId(postId: Long, actorIdOpt: Option[Long]): Future[Option[models.Post]] =
+    actorIdOpt.fold(findPostWithAccountByPostId(postId))(t => findPostWithAccountByPostId(postId, t))
+
+  def findPostWithAccountByPostId(postId: Long): Future[Option[models.Post]] =
+    db.run(for {
+      dbPost <- posts.filter(_.id === postId).result.head
+      dbAccount <- accounts.filter(_.id === dbPost.ownerId).result.head
+    } yield (dbPost, dbAccount)) map {
+      case (dbPost, dbAccount) =>
+        val post: models.Post = postFrom(dbPost)
+        post.ownerOpt = Some(accountFrom(dbAccount))
+        Some(post)
+    } flatMap (
+      _ match {
+        case Some(post) => findLikes(Seq(post.id), TargetType.POST).map { likes =>
+          post.likes = likes
+          Some(post)
+        }
+        case _ => Future.successful(None)
+      })
+
+  def findLikes(targetIds: Seq[Long], targetType: Int): Future[Seq[models.Like]] = {
+    db.run((likes.filter(_.targetId inSet targetIds).filter(_.targetType === targetType).sortBy(_.id.desc) join
+      accounts.map(t => (t.login, t.id, t.accountType, t.name)) on { case (like, userProp) => like.ownerId === userProp._2 }).take(targetIds.length * maxLikesView)
+      .result).map(_.map {
+      case (like, userProp) =>
+        val likeModel = likeFrom(like)
+        likeModel.userLoginOpt = Some(userProp._1)
+        likeModel.displayNameOpt = userProp._3 match {
+          case AccountType.COMPANY => userProp._4
+          case _ => Some(userProp._1)
+        }
+        likeModel
+    })
+  }
+
+  def findTagsByTargetIds(targetType: Int, postIds: Seq[Long]): Future[Seq[(models.Tag, Long)]] = {
+    val query = for {
+      (tInp, t) <- tagsToTargets.filter(t => t.targetId.inSet(postIds) && t.targetType === targetType) join tags on { case (tInps, tg) => tInps.tagId === tg.id }
+    } yield (tInp, t)
+    db.run(query.result).map(_.map {
+      case (tInp, t) => (tagFrom(t), tInp.targetId)
+    })
+  }
+
+  def findTagsByTargetId(targetType: Int, targetId: Long): Future[Seq[models.Tag]] = {
+    val query = for {
+      (tInp, t) <- tagsToTargets.filter(t => t.targetId === targetId && t.targetType === targetType) join tags on { case (tInps, tg) => tInps.tagId === tg.id }
+    } yield t
+    db.run(query.result).map(_.map(tagFrom))
+  }
+
+  def findPostWithAccountByPostId(postId: Long, actorId: Long): Future[Option[models.Post]] = {
+    val query = for {
+      ((dbPost, dbAccount), dbLikedOpt) <- posts.filter(_.id === postId) join
+        accounts on { case (post, user) => post.ownerId === user.id } joinLeft
+        likes.filter(t => t.targetType === TargetType.POST && t.ownerId === actorId) on { case ((post, user), like) => like.targetId === post.id }
+    } yield (dbPost, dbAccount, dbLikedOpt)
+    db.run(query.result.headOption) map (_.map {
+      case (dbPost, dbAccount, dbLikedOpt) =>
+        val post = postFrom(dbPost)
+        post.ownerOpt = Some(accountFrom(dbAccount))
+        post.likedOpt = if (dbLikedOpt.isEmpty) Some(false) else Some(true)
+        post
+    }) flatMap (
+      _ match {
+        case Some(post) => findLikes(Seq(post.id), TargetType.POST).map { likes =>
+          post.likes = likes
+          Some(post)
+        }
+        case _ => Future.successful(None)
+      }) flatMap (
+        _ match {
+          case Some(post) => findTagsByTargetId(TargetType.POST, post.id).map { tags =>
+            post.tags = tags
+            Some(post)
+          }
+          case _ => Future.successful(None)
+        })
+  }
+
+  def fillAccountBalances(account: models.Account): Future[Option[Account]] = {
+    db.run {
+      for {
+        balanceTokens <- filterCurrentAccountBalanceValue(account.id, CurrencyType.TOKEN).result.headOption
+        balanceDollars <- filterCurrentAccountBalanceValue(account.id, CurrencyType.DOLLAR).result.headOption
+        balancePower <- filterCurrentAccountBalanceValue(account.id, CurrencyType.POWER).result.headOption
+      } yield (balanceTokens, balanceDollars, balancePower)
+    } map {
+      case (balanceTokens, balanceDollars, balancePower) =>
+        account.balanceTokenOpt = balanceTokens
+        account.balanceDollarOpt = balanceDollars
+        account.balancePowerOpt = balancePower
+        Some(account)
+    }
+  }
+
+  def findAccountBySessionKeyAndIPWithBalances(sessionKey: String, ip: String): Future[Option[models.Account]] = {
+    val query = for {
+      dbSession <- sessions.filter(t => t.sessionKey === sessionKey && t.ip === ip)
+      dbAccount <- accounts.filter(_.id === dbSession.userId)
+    } yield (dbAccount, dbSession)
+    db.run(query.result.headOption).map(_.map {
+      case (dbAccount, dbSession) =>
+        val user = accountFrom(dbAccount)
+        user.sessionOpt = Some(sessionFrom(dbSession))
+        user
+    }).flatMap(_ match {
+      case Some(account) => fillAccountBalances(account)
+      case _ => Future.successful(None)
+    })
+  }
+
+  def approveScheduledTransactions(): Future[Int] = {
+    val timestamp = System.currentTimeMillis
+
+    val query = transactions.filter(t => t.state === TxState.SCHEDULED && t.scheduled < timestamp).result.flatMap { txs =>
+      DBIO.sequence {
+        txs.map { tx =>
+          transactions.filter(_.id === tx.id)
+            .map(itx => (itx.scheduled, itx.processed, itx.state))
+            .update(None, Some(timestamp), TxState.APPROVED).zip {
+              if (tx.toType == TargetType.ACCOUNT)
+                updateCurrentAccountBalance(tx.toId.get, tx.currencyId, tx.amount)
+              else
+                DBIO.successful(0)
+            }.map { case (a, b) => b }
+        }
+      }.map(_.sum)
+    }
+    db.run(query.transactionally)
+  }
+
+  def findPostsWithAccountsByText(pageId: Long, text: String, actorIdOpt: Option[Long]): Future[Seq[models.Post]] =
+    actorIdOpt.fold(findPostsWithAccountsByText(pageId, text))(actorId => findPostsWithAccountsByText(pageId, text, actorId))
+
+  def findPostsWithAccountsByText(pageId: Long, text: String, actorId: Long): Future[Seq[models.Post]] = {
+    val searchString = "%" + text + "%"
+    val query = for {
+      (dbPost, dbLikedOpt) <- (posts.filter(t => t.content.like(searchString) || t.title.like(searchString)) union
+        posts.filter(_.ownerId in {
+          accounts.filter(_.login.like(searchString)).map(_.id)
+        }))
+        .joinLeft(likes.filter(t => t.targetType === TargetType.POST && t.ownerId === actorId)).on { case (post, like) => like.targetId === post.id }
+        .sortBy(_._1.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+      dbAccount <- accounts.filter(_.id === dbPost.ownerId)
+    } yield (dbPost, dbLikedOpt, dbAccount)
+    db.run(query.result).map(_.map {
+      case (dbPost, dbLikedOpt, dbAccount) =>
+        val post = postFrom(dbPost)
+        post.ownerOpt = Some(accountFrom(dbAccount))
+        post.likedOpt = Some(if (dbLikedOpt.isDefined) true else false)
+        post
+    }) flatMap (posts =>
+      findLikes(posts.map(_.id), TargetType.POST).map { likes =>
+        posts.foreach(post => post.likes = likes.filter(_.targetId == post.id).take(maxLikesView))
+        posts
+      }) flatMap (posts =>
+      findTagsByTargetIds(TargetType.POST, posts.map(_.id)).map { touples =>
+        posts.foreach { post => post.tags = touples.filter(_._2 == post.id).map(_._1) }
+        posts
+      })
+  }
+
+  def findPostsWithAccountsByText(pageId: Long, text: String): Future[Seq[models.Post]] = {
+    val searchString = "%" + text + "%"
+    val query = for {
+      dbPost <- (posts.filter(t => t.content.like(searchString) || t.title.like(searchString)) union
+        posts.filter(_.ownerId in {
+          accounts.filter(_.login.like(searchString)).map(_.id)
+        })).sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+      //dbLiked.joinLeft(likes.filter(t => t.targetType === TargetType.POST && t.ownerId === actorId)).on { case ((post, user), like) => like.targetId === post.id }
+      dbAccount <- accounts.filter(_.id === dbPost.ownerId)
+    } yield (dbPost, dbAccount)
+    db.run(query.result).map(_.map {
+      case (dbPost, dbAccount) =>
+        val post = postFrom(dbPost)
+        post.ownerOpt = Some(accountFrom(dbAccount))
+        post
+    }) flatMap (posts =>
+      findLikes(posts.map(_.id), TargetType.POST).map { likes =>
+        posts.foreach(post => post.likes = likes.filter(_.targetId == post.id).take(maxLikesView))
+        posts
+      }) flatMap (posts =>
+      findTagsByTargetIds(TargetType.POST, posts.map(_.id)).map { touples =>
+        posts.foreach { post => post.tags = touples.filter(_._2 == post.id).map(_._1) }
+        posts
+      })
+  }
+
+  def findPostsWithAccountsByCategoryTagNames(
+    actorIdOpt: Option[Long],
+    userIdOpt: Option[Long],
+    categoryOpt: Option[String],
+    pageId: Long, tagNamesOpt: Option[Seq[String]]): Future[Seq[models.Post]] =
+    tagNamesOpt match {
+      case Some(tagNames) =>
+        db.run(tags.filter(_.name inSet tagNames).map(_.id).result) flatMap { tagIds =>
+          actorIdOpt.fold(findPostsWithAccountsByCategoryTagIds(userIdOpt, categoryOpt, pageId, Some(tagIds)))(actorId => findPostsWithAccountsByCategoryTagIds(actorId, userIdOpt, categoryOpt, pageId, Some(tagIds)))
+        }
+      case _ =>
+        actorIdOpt.fold(findPostsWithAccountsByCategoryTagIds(userIdOpt, categoryOpt, pageId, None))(actorId => findPostsWithAccountsByCategoryTagIds(actorId, userIdOpt, categoryOpt, pageId, None))
+    }
+
+  def findPostsPagesWithAccountsByCategoryTagNames(
+    userIdOpt: Option[Long],
+    categoryOpt: Option[String],
+    tagNamesOpt: Option[Seq[String]]): Future[Int] =
+    tagNamesOpt match {
+      case Some(tagNames) =>
+        db.run(tags.filter(_.name inSet tagNames).map(_.id).result) flatMap { tagIds =>
+          findPostsPagesWithAccountsByCategoryTagIds(userIdOpt, categoryOpt, Some(tagIds))
+        }
+      case _ =>
+        findPostsPagesWithAccountsByCategoryTagIds(userIdOpt, categoryOpt, None)
+    }
+
+  def findPostsPagesWithAccountsByCategoryTagIds(
+    userIdOpt: Option[Long],
+    categoryOpt: Option[String],
+    tagIdsOpt: Option[Seq[Long]]) = {
+    db.run(findPostsWithAccountsByCategoryTagIdsQuery(userIdOpt, categoryOpt, tagIdsOpt).size.result) map pages
+  }
+
+  def findPostsWithAccountsByCategoryTagIdsQuery(
+    userIdOpt: Option[Long],
+    categoryOpt: Option[String],
+    tagIdsOpt: Option[Seq[Long]]) = {
+    val first = userIdOpt match {
+      case Some(userId) => posts.filter(_.ownerId === userId)
+      case _ => posts
+    }
+    tagIdsOpt match {
+      case Some(tagIds) => first filter (_.id in {
+        tagsToTargets.filter(t => t.tagId.inSet(tagIds) && t.targetType === TargetType.POST).map(_.targetId)
+      })
+      case _ => first
+    }
+  }
+
+  def findPostsWithAccountsByCategoryTagIds(
+    userIdOpt: Option[Long],
+    categoryOpt: Option[String],
+    pageId: Long,
+    tagIdsOpt: Option[Seq[Long]]): Future[Seq[models.Post]] = {
+    val query = for {
+      (dbPost, dbAccount) <- (findPostsWithAccountsByCategoryTagIdsQuery(userIdOpt, categoryOpt, tagIdsOpt)
+        join accounts on { case (post, user) => post.ownerId === user.id })
+        .sortBy {
+          case (post, user) =>
+            (categoryOpt match {
+              case Some(PostsFilter.NEW) => post.created.desc
+              case Some(PostsFilter.HOT) => post.commentsCount.desc
+              case Some(PostsFilter.TRENDING) => post.likesCount.desc
+              case Some(PostsFilter.PROMOUTED) => post.promo.desc
+              case _ => post.id.desc
+            })
+        }.drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+    } yield (dbPost, dbAccount)
+    db.run(query.result).map(_.map {
+      case (dbPost, dbAccount) =>
+        val post = postFrom(dbPost)
+        post.ownerOpt = Some(accountFrom(dbAccount))
+        post
+    }) flatMap (posts =>
+      findLikes(posts.map(_.id), TargetType.POST).map { likes =>
+        posts.foreach(post => post.likes = likes.filter(_.targetId == post.id).take(maxLikesView))
+        posts
+      }) flatMap (posts =>
+      findTagsByTargetIds(TargetType.POST, posts.map(_.id)).map { touples =>
+        posts.foreach { post => post.tags = touples.filter(_._2 == post.id).map(_._1) }
+        posts
+      })
+  }
+
+  def findPostsWithAccountsByCategoryTagIds(
+    actorId: Long,
+    userIdOpt: Option[Long],
+    categoryOpt: Option[String],
+    pageId: Long,
+    tagIdsOpt: Option[Seq[Long]]): Future[Seq[models.Post]] = {
+    val query = for {
+      ((dbPost, dbAccount), dbLikeOpt) <- ({
+        val first = userIdOpt match {
+          case Some(userId) => posts.filter(_.ownerId === userId)
+          case _ => posts
+        }
+        tagIdsOpt match {
+          case Some(tagIds) => first filter (_.id in {
+            tagsToTargets.filter(t => t.tagId.inSet(tagIds) && t.targetType === TargetType.POST).map(_.targetId)
+          })
+          case _ => first
+        }
+      }
+        join accounts on { case (post, user) => post.ownerId === user.id })
+        .joinLeft(likes.filter(t => t.targetType === TargetType.POST && t.ownerId === actorId)).on { case ((post, user), like) => like.targetId === post.id }
+        .sortBy {
+          case ((post, user), like) =>
+            (categoryOpt match {
+              case Some(PostsFilter.NEW) => post.created.desc
+              case Some(PostsFilter.HOT) => post.commentsCount.desc
+              case Some(PostsFilter.TRENDING) => post.likesCount.desc
+              case Some(PostsFilter.PROMOUTED) => post.promo.desc
+              case _ => post.id.desc
+            })
+        }.drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+    } yield (dbPost, dbAccount, dbLikeOpt)
+    db.run(query.result).map(_.map {
+      case (dbPost, dbAccount, dbLikeOpt) =>
+        val post = postFrom(dbPost)
+        post.ownerOpt = Some(accountFrom(dbAccount))
+        post.likedOpt = if (dbLikeOpt.isEmpty) Some(false) else Some(true)
+        post
+    }) flatMap (posts =>
+      findLikes(posts.map(_.id), TargetType.POST).map { likes =>
+        posts.foreach(post => post.likes = likes.filter(_.targetId == post.id).take(maxLikesView))
+        posts
+      }) flatMap (posts =>
+      findTagsByTargetIds(TargetType.POST, posts.map(_.id)).map { touples =>
+        posts.foreach { post => post.tags = touples.filter(_._2 == post.id).map(_._1) }
+        posts
+      })
+  }
+
+  def findPostsWithAccountsByCategoryByNames(
+    actorIdOpt: Option[Long],
+    userLogin: String,
+    categoryOpt: Option[String],
+    pageId: Long,
+    tagNamesOpt: Option[Seq[String]])(implicit ac: AppContext): Future[Seq[models.Post]] =
+    db.run(accounts.filter(_.login === userLogin).result.headOption).flatMap(_.fold(Future(Seq[models.Post]())) { user =>
+      findPostsWithAccountsByCategoryTagNames(actorIdOpt, Some(user.id), categoryOpt, pageId, tagNamesOpt)
+    })
+
+  def findAccountBySUIDAndSessionId(sessionId: Long, sessionKey: String): Future[Option[Account]] = {
+    val query = for {
+      dbSession <- sessions.filter(t => t.id === sessionId && t.sessionKey === sessionKey)
+      dbAccount <- accounts.filter(_.id === dbSession.userId)
+    } yield (dbAccount, dbSession)
+    db.run(query.result.headOption).map(_.map {
+      case (dbAccount, dbSession) =>
+        val user = accountFrom(dbAccount)
+        user.sessionOpt = Some(sessionFrom(dbSession))
+        user
+    })
+  }
+
+  def findCommentsWithAccountsByPostId(postId: Long, userIdOpt: Option[Long]): Future[Seq[models.Comment]] =
+    userIdOpt.fold(findCommentsWithAccountsByPostId(postId))(t => findCommentsWithAccountsByPostId(postId, t))
+
+  def findCommentsWithAccountsByPostId(postId: Long, userId: Long): Future[Seq[models.Comment]] = {
+    val query = for {
+      ((dbComment, dbAccount), dbLikeOpt) <- comments.filter(_.postId === postId) join
+        accounts on (_.ownerId === _.id) joinLeft
+        likes.filter(t => t.targetType === TargetType.COMMENT && t.ownerId === userId) on { case ((c, u), l) => c.id === l.targetId }
+    } yield (dbComment, dbAccount, dbLikeOpt)
+    db.run(query.result).map(_.map {
+      case (dbComment, dbAccount, dbLikeOpt) =>
+        val comment = commentFrom(dbComment)
+        comment.ownerOpt = Some(accountFrom(dbAccount))
+        comment.likedOpt = if (dbLikeOpt.isEmpty) Some(false) else Some(true)
+        comment
+    }) flatMap (comments =>
+      findLikes(comments.map(_.id), TargetType.COMMENT).map { likes =>
+        comments.foreach(comment => comment.likes = likes.filter(_.targetId == comment.id).take(maxLikesView))
+        comments
+      })
+  }
+
+  def findCommentsWithAccountsByPostId(postId: Long): Future[Seq[models.Comment]] = {
+    val query = for {
+      dbComment <- comments.filter(_.postId === postId)
+      dbAccount <- accounts.filter(_.id === dbComment.ownerId)
+    } yield (dbComment, dbAccount)
+    db.run(query.result).map(_.map {
+      case (dbComment, dbAccount) =>
+        val comment = commentFrom(dbComment)
+        comment.ownerOpt = Some(accountFrom(dbAccount))
+        comment
+    }) flatMap (comments =>
+      findLikes(comments.map(_.id), TargetType.COMMENT).map { likes =>
+        comments.foreach(comment => comment.likes = likes.filter(_.targetId == comment.id))
+        comments
+      })
+  }
+
+  def findCommentsWithAccountsForAllAccountPosts(login: String, pageId: Long, userIdOpt: Option[Long]): Future[Seq[models.Comment]] =
+    db.run(accounts.filter(_.login === login).result.headOption) flatMap (_.fold(Future(Seq[models.Comment]())) { user =>
+      findCommentsWithAccountsForAllAccountPosts(user.id, pageId, userIdOpt)
+    })
+
+  def findCommentsWithAccountsForAllAccountPosts(userId: Long, pageId: Long, userIdOpt: Option[Long]): Future[Seq[models.Comment]] =
+    userIdOpt.fold(findCommentsWithAccountsForAllAccountPosts(userId, pageId))(uid => findCommentsWithAccountsForAllAccountPosts(userId, pageId, uid))
+
+  def findCommentsWithAccountsForAllAccountPosts(userId: Long, pageId: Long, actorAccountId: Long): Future[Seq[models.Comment]] = {
+    val query = for {
+      (((dbPost, dbComment), dbAccount), dbLikeOpt) <- (posts.filter(_.ownerId === userId) join
+        comments on (_.id === _.postId) join
+        accounts on { case ((post, comment), user) => user.id === comment.ownerId } joinLeft
+        likes.filter(t => t.targetType === TargetType.COMMENT && t.ownerId === actorAccountId) on { case (((post, comment), user), like) => like.targetId === comment.id })
+        .sortBy { case (((post, comment), user), likeOpt) => comment.id.desc }.drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+    } yield (dbComment, dbAccount, dbLikeOpt)
+    db.run(query.result).map(_.map {
+      case (dbComment, dbAccount, dbLikeOpt) =>
+        val comment = commentFrom(dbComment)
+        comment.ownerOpt = Some(accountFrom(dbAccount))
+        comment.likedOpt = if (dbLikeOpt.isEmpty) Some(false) else Some(true)
+        comment
+    }) flatMap (comments =>
+      findLikes(comments.map(_.id), TargetType.COMMENT).map { likes =>
+        comments.foreach(comment => comment.likes = likes.filter(_.targetId == comment.id).take(maxLikesView))
+        comments
+      })
+  }
+
+  def findCommentsPagesWithAccountsForAllAccountPosts(userId: Long): Future[Int] = {
+    db.run(posts.filter(_.ownerId === userId).join(comments).on(_.id === _.postId).size.result) map pages
+  }
+
+  def findCommentsWithAccountsForAllAccountPosts(userId: Long, pageId: Long): Future[Seq[models.Comment]] = {
+    val query = for {
+      ((dbPost, dbComment), dbAccount) <- (posts.filter(_.ownerId === userId) join
+        comments on (_.id === _.postId) join
+        accounts on { case ((post, comment), user) => user.id === comment.ownerId })
+        .sortBy { case ((post, comment), user) => comment.id.desc }.drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+    } yield (dbComment, dbAccount)
+    db.run(query.result).map(_.map {
+      case (dbComment, dbAccount) =>
+        val comment = commentFrom(dbComment)
+        comment.ownerOpt = Some(accountFrom(dbAccount))
+        comment
+    }) flatMap (comments =>
+      findLikes(comments.map(_.id), TargetType.COMMENT).map { likes =>
+        comments.foreach(comment => comment.likes = likes.filter(_.targetId == comment.id).take(maxLikesView))
+        comments
+      })
+  }
+
+  def isAlreadyLikeCommentByAccount(userId: Long, commentId: Long): Future[Boolean] =
+    db.run(likes
+      .filter(t => t.ownerId === userId && t.targetId === commentId && t.targetType === TargetType.COMMENT)
+      .result
+      .headOption).map(_.fold(false)(_ => true))
+
+  def isAlreadyLikePostByAccount(userId: Long, postId: Long): Future[Boolean] =
+    db.run(likes
+      .filter(t => t.ownerId === userId && t.targetId === postId && t.targetType === TargetType.POST)
+      .result
+      .headOption).map(_.fold(false)(_ => true))
+
+  def findCommentById(id: Long): Future[Option[models.Comment]] =
+    getCommentFromQuery(comments.filter(_.id === id))
+
+  def getCommentFromQuery(query: Query[(Comments), (DBComment), Seq]): Future[Option[models.Comment]] =
+    db.run(query.result.headOption).map(_.map(commentFrom))
+
+  def findPostById(id: Long): Future[Option[models.Post]] =
+    getPostFromQuery(posts.filter(_.id === id))
+
+  def getPostFromQuery(query: Query[(Posts), (DBPost), Seq]): Future[Option[models.Post]] =
+    db.run(query.result.headOption).map(_.map(postFrom))
+
+  def getAccountFromQuery(query: Query[(Accounts), (DBAccount), Seq]): Future[Option[models.Account]] =
+    db.run(query.result.headOption).map(_.map(accountFrom))
+
+  def getSessionFromQuery(query: Query[(Sessions), (DBSession), Seq]): Future[Option[models.Session]] =
+    db.run(query.result.headOption).map(_.map(sessionFrom))
+
+  def createPostWithPostsCounterUpdate(
+    userId: Long,
+    productIdOpt: Option[Long],
+    title: String,
+    content: String,
+    thumbnail: Option[String],
+    rewardType: Int,
+    postType: Int,
+    limit: Option[Long],
+    tagNames: Seq[String]): Future[Option[models.Post]] = {
+
+    val query = for {
+      user <- accounts.filter(_.id === userId).result.head
+      post <- (posts returning posts.map(_.id) into ((v, id) => v.copy(id = id))) += new models.daos.DBPost(
+        0,
+        userId,
+        productIdOpt,
+        title,
+        thumbnail,
+        content,
+        models.ContentType.MARKDOWN,
+        postType,
+        models.PostStatus.ACTIVE,
+        0,
+        models.PostStatus.ACTIVE,
+        0,
+        0,
+        0,
+        System.currentTimeMillis,
+        0,
+        rewardType,
+        0,
+        0,
+        0,
+        0,
+        0)
+      productReviewsCountOpt <- productIdOpt match {
+        case Some(productId) =>
+          posts.filter(t => t.id === productId && t.postType === PostType.PRODUCT)
+            .map(_.postsCount).result.headOption
+        case _ => DBIO.successful(None)
+      }
+      _ <- productReviewsCountOpt match {
+        case Some(productReviewsCount) =>
+          posts.filter(t => t.id === productIdOpt.get && t.postType === PostType.PRODUCT)
+            .map(_.postsCount).update(productReviewsCount + 1)
+        case _ => DBIO.successful(None)
+      }
+      _ <- accounts.filter(_.id === userId)
+        .map(t => (t.postsCount, t.postsCounter))
+        .update(user.postsCount + 1, user.postsCounter + 1)
+      actualPost <- posts.filter(_.id === post.id).result.head
+    } yield actualPost
+
+    db.run(query.transactionally) flatMap { dbPost =>
+      getOrCreateTags(tagNames) flatMap { tags =>
+        assignTagsToPost(tags.map(_.id), dbPost.id).map { _ =>
+          val post = postFrom(dbPost)
+          post.tags = tags
+          Some(post)
+        }
+      }
+    }
+  }
+
+  def createProductWithPostsCounterUpdate(
+    userId: Long,
+    name: String,
+    about: String,
+    thumbnail: Option[String],
+    tagNames: Seq[String]): Future[Option[models.Post]] = {
+
+    val query = for {
+      user <- accounts.filter(_.id === userId).result.head
+      product <- (posts returning posts.map(_.id) into ((v, id) => v.copy(id = id))) += new models.daos.DBPost(
+        0,
+        userId,
+        None,
+        name,
+        thumbnail,
+        about,
+        models.ContentType.MARKDOWN,
+        PostType.PRODUCT,
+        models.PostStatus.ACTIVE,
+        0,
+        models.PostStatus.ACTIVE,
+        0,
+        0,
+        0,
+        System.currentTimeMillis,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0)
+      _ <- accounts.filter(_.id === userId)
+        .map(t => (t.postsCount, t.postsCounter))
+        .update(user.postsCount + 1, user.postsCounter + 1)
+    } yield product
+
+    db.run(query.transactionally) map (t => Some(postFrom(t)))
+    //    db.run(query.transactionally) flatMap { dbProduct =>
+    //      getOrCreateTags(tagNames) flatMap { tags =>
+    //        assignTagsToPost(tags.map(_.id), dbProduct.id).map { _ =>
+    //          val post = productFrom(dbProduct)
+    //          post.tags = tags
+    //          Some(post)
+    //        }
+    //      }
+    //    }
+  }
+
+  def assignTagsToPost(tagsIds: Seq[Long], postId: Long) =
+    db.run(DBIO.sequence(tagsIds.map(tagId => tagsToTargets += DBTagToTarget(tagId, postId, TargetType.POST, System.currentTimeMillis))).map(_.sum).transactionally)
+
+  def getOrCreateTags(names: Seq[String]): Future[Seq[models.Tag]] =
+    db.run(DBIO.sequence(names.map(getOrCreateTagAction)).transactionally).map(_.map(tagFrom))
+
+  def getOrCreateTagAction(name: String) =
+    tags.filter(_.name === name).result.headOption.flatMap {
+      case Some(tag) => DBIO.successful(tag)
+      case None => (tags returning tags.map(_.id) into ((v, id) => v.copy(id = id))) += DBTag(0, name)
+    }
+
+  def currencySelectorCommentRewardDAO(currency: Int, t: DAO.this.Comments) =
+    currency match {
+      case CurrencyType.TOKEN => t.rewardToken
+      case CurrencyType.POWER => t.rewardPower
+      case CurrencyType.DOLLAR => t.rewardDollar
+    }
+
+  def currencySelectorCommentRewardDB(currency: Int, t: DBComment) =
+    currency match {
+      case CurrencyType.TOKEN => t.rewardToken
+      case CurrencyType.POWER => t.rewardPower
+      case CurrencyType.DOLLAR => t.rewardDollar
+    }
+
+  def currencySelectorPostRewardDAO(currency: Int, t: DAO.this.Posts) =
+    currency match {
+      case CurrencyType.TOKEN => t.rewardToken
+      case CurrencyType.POWER => t.rewardPower
+      case CurrencyType.DOLLAR => t.rewardDollar
+    }
+
+  def currencySelectorPostRewardDB(currency: Int, t: DBPost) =
+    currency match {
+      case CurrencyType.TOKEN => t.rewardToken
+      case CurrencyType.POWER => t.rewardPower
+      case CurrencyType.DOLLAR => t.rewardDollar
+    }
+
+  def udateCommentReward(optTx: Option[DBTransaction], comment: DBComment, reward: Long, currency: Int): DBIOAction[Int, NoStream, Effect.Write] =
+    optTx match {
+      case Some(tx) => comments.filter(_.id === comment.id)
+        .map(t => currencySelectorCommentRewardDAO(currency, t))
+        .update(currencySelectorCommentRewardDB(currency, comment) + reward)
+      case _ => DBIO.successful(0)
+    }
+
+  def udatePostReward(optTx: Option[DBTransaction], post: DBPost, reward: Long, currency: Int): DBIOAction[Int, NoStream, Effect.Write] =
+    optTx match {
+      case Some(tx) => posts.filter(_.id === post.id)
+        .map(t => currencySelectorPostRewardDAO(currency, t))
+        .update(currencySelectorPostRewardDB(currency, post) + reward)
+      case _ => DBIO.successful(0)
+    }
+
+  def findAccountWithRolesById(userId: Long): Future[Option[Account]] =
+    updateAccountWithRoles(findAccountById(userId))
+
+  def updateTxsToAccountsWithAccounts(t: models.Transaction): Future[models.Transaction] =
+    t.toId match {
+      case Some(id) =>
+        findAccountById(id).map(_.fold(t) { u =>
+          t.toAccountOpt = Some(u)
+          t
+        })
+      case _ => Future(t)
+    }
+
+  def updateTxsFromAccountsWithAccounts(t: models.Transaction): Future[models.Transaction] =
+    t.fromId match {
+      case Some(id) =>
+        findAccountById(id).map(_.fold(t) { u =>
+          t.fromAccountOpt = Some(u)
+          t
+        })
+      case _ => Future(t)
+    }
+
+  def updateAccountWithRoles(futureOptAccount: Future[Option[Account]]): Future[Option[Account]] =
+    futureOptAccount flatMap {
+      case Some(u) =>
+        findRolesByAccountId(u.id).map { r =>
+          Some {
+            u.roles = r
+            u
+          }
+        }
+      case None => Future(None)
+    }
+
+  def findRolesByAccountId(userId: Long) =
+    db.run(roles.filter(_.userId === userId).result).map(_.map(_.role))
+
+  def getTransactionsByAccountIdWithInfo(userId: Long, pageId: Long, isSchelduled: Boolean): Future[Seq[models.Transaction]] = {
+    findTransactionsByAccountId(userId, pageId, isSchelduled).flatMap { st =>
+      Future.sequence(st.map(t => updateTxsFromAccountsWithAccounts(t).flatMap(updateTxsToAccountsWithAccounts)))
+    }
+  }
+
+  def getTransactionsPagesByAccountIdWithInfo(userId: Long, isSchelduled: Boolean): Future[Int] = {
+    if (isSchelduled)
+      db.run(transactions
+        .filter(t => ((t.fromType === models.TargetType.ACCOUNT && t.fromId === userId) ||
+          (t.toType === models.TargetType.ACCOUNT && t.toId === userId)) && t.scheduled.isDefined).size.result) map pages
+    else
+      db.run(transactions
+        .filter(t => (t.fromType === models.TargetType.ACCOUNT && t.fromId === userId) ||
+          (t.toType === models.TargetType.ACCOUNT && t.toId === userId)).size.result) map pages
+  }
+
+  def findTransactionsByAccountId(userId: Long, pageId: Long, isSchelduled: Boolean): Future[Seq[models.Transaction]] = {
+    val query = for {
+      dbTx <- if (isSchelduled)
+        transactions
+          .filter(t => ((t.fromType === models.TargetType.ACCOUNT && t.fromId === userId) ||
+            (t.toType === models.TargetType.ACCOUNT && t.toId === userId)) && t.scheduled.isDefined)
+          .sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+      else
+        transactions
+          .filter(t => (t.fromType === models.TargetType.ACCOUNT && t.fromId === userId) ||
+            (t.toType === models.TargetType.ACCOUNT && t.toId === userId))
+          .sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+    } yield (dbTx)
+    db.run(query.result).map(_ map transactionFrom)
+  }
+
+  def invalidateSessionBySessionKeyAndIP(sessionKey: String, ip: String): Future[Boolean] =
+    db.run(sessions.filter(t => t.sessionKey === sessionKey && t.ip === ip).map(_.expire).update(System.currentTimeMillis).transactionally) map (r => if (r == 1) true else false)
+
+  def updateAccountAbout(userId: Long, about: String): Future[Boolean] =
+    db.run(accounts.filter(_.id === userId).map(_.about).update(Some(about)).transactionally) map (r => if (r == 1) true else false)
+
+  def updateAccountBackground(userId: Long, bgURL: String): Future[Boolean] =
+    db.run(accounts.filter(_.id === userId).map(_.background).update(Some(bgURL)).transactionally) map (r => if (r == 1) true else false)
+
+  def updateAccountAvatar(userId: Long, avatarURL: String): Future[Boolean] =
+    db.run(accounts.filter(_.id === userId).map(_.avatar).update(Some(avatarURL)).transactionally) map (r => if (r == 1) true else false)
+
+  def updateAccountName(userId: Long, name: String): Future[Boolean] =
+    db.run(accounts.filter(_.id === userId).map(_.name).update(Some(name)).transactionally) map (r => if (r == 1) true else false)
+
+  def updateAccountSurname(userId: Long, surname: String): Future[Boolean] =
+    db.run(accounts.filter(_.id === userId).map(_.surname).update(Some(surname)).transactionally) map (r => if (r == 1) true else false)
+
+  def createSession(
+    userId: Long,
+    ip: String,
+    sessionKey: String,
+    created: Long,
+    expire: Long): Future[Option[models.Session]] = {
+    val query = for {
+      dbSession <- (sessions returning sessions.map(_.id) into ((v, id) => v.copy(id = id))) += new models.daos.DBSession(
+        0,
+        userId,
+        ip,
+        sessionKey,
+        created,
+        expire)
+    } yield dbSession
+    db.run(query.transactionally) map { dbSession =>
+      Some(sessionFrom(dbSession))
+    }
+  }
+
+  def getAccountsPages(pageSize: Long) =
+    db.run(accounts.length.result).map { r =>
+      pages(r, pageSize.toInt)
+    }
+
+  def getAccountBalancesPages(pageSize: Long) =
+    db.run(balances.filter(t => t.ownerType === TargetType.ACCOUNT && t.balanceType === BalanceType.CURRENT).length.result).map { r =>
+      pages(r, pageSize.toInt)
+    }
+
+  def findPreviousAccountBalance(ownerId: Long, currencyId: Int) =
+    filterAccountBalance(ownerId, currencyId, BalanceType.PREVIOUS).result.head
+
+  def filterPreviousAccountBalance(ownerId: Long, currencyId: Int) =
+    filterAccountBalance(ownerId, currencyId, BalanceType.PREVIOUS)
+
+  def filterCurrentAccountBalanceValue(ownerId: Long, currencyId: Int) =
+    filterCurrentAccountBalance(ownerId, currencyId).map(_.value)
+
+  def filterCurrentAccountBalance(ownerId: Long, currencyId: Int) =
+    filterAccountBalance(ownerId, currencyId, BalanceType.CURRENT)
+
+  def filterCurrentBatchBalance(ownerId: Long, currencyId: Int) =
+    balances.filter(t =>
+      t.ownerType === TargetType.BATCH &&
+        t.balanceType === BalanceType.CURRENT &&
+        t.ownerId === ownerId &&
+        t.currencyId === currencyId)
+
+  def filterCurrentCampaingBalance(ownerId: Long, currencyId: Int) =
+    balances.filter(t =>
+      t.ownerType === TargetType.CAMPAIGN &&
+        t.balanceType === BalanceType.CURRENT &&
+        t.ownerId === ownerId &&
+        t.currencyId === currencyId)
+
+  def findCurrentBatchBalance(ownerId: Long, currencyId: Int) =
+    filterCurrentBatchBalance(ownerId, currencyId).result.head
+
+  def findCurrentCampaingBalance(ownerId: Long, currencyId: Int) =
+    filterCurrentCampaingBalance(ownerId, currencyId).result.head
+
+  def updateCurrentCampaingBalance(ownerId: Long, currencyId: Int, delta: Long) =
+    findCurrentCampaingBalance(ownerId, currencyId).flatMap { balance =>
+      balances.filter(_.id === balance.id)
+        .map(t => (t.value, t.updated))
+        .update(balance.value + delta, System.currentTimeMillis())
+    }
+
+  def updateCurrentBatchBalance(ownerId: Long, currencyId: Int, delta: Long) =
+    findCurrentBatchBalance(ownerId, currencyId).flatMap { balance =>
+      balances.filter(_.id === balance.id)
+        .map(t => (t.value, t.updated))
+        .update(balance.value + delta, System.currentTimeMillis())
+    }
+
+  def filterAccountBalance(ownerId: Long, currencyId: Int, balanceType: Int) =
+    balances.filter(t =>
+      t.ownerType === TargetType.ACCOUNT &&
+        t.balanceType === balanceType &&
+        t.ownerId === ownerId &&
+        t.currencyId === currencyId)
+
+  def findCurrentAccountBalance(ownerId: Long, currencyId: Int) =
+    filterCurrentAccountBalance(ownerId, currencyId).result.head
+
+  def findCurrentAccountBalanceOpt(ownerId: Long, currencyId: Int) =
+    filterCurrentAccountBalance(ownerId, currencyId).result.headOption
+
+  def updateCurrentAccountBalance(ownerId: Long, currencyId: Int, delta: Long) =
+    findCurrentAccountBalance(ownerId, currencyId).flatMap { balance =>
+      balances.filter(_.id === balance.id)
+        .map(t => (t.value, t.updated))
+        .update(balance.value + delta, System.currentTimeMillis())
+    }
+
+  def updateBalances(pageSize: Long, pageId: Long): Future[Int] = {
+    val timestamp = System.currentTimeMillis
+    db.run((for {
+      balancesToUpdate <- balances
+        .filter(t => t.ownerType === TargetType.ACCOUNT && t.balanceType === BalanceType.CURRENT)
+        .sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize).result
+      updatedRows <- DBIO.sequence {
+        balancesToUpdate.map { balance =>
+          balances.filter(t =>
+            t.currencyId === balance.currencyId &&
+              t.ownerId === balance.ownerId &&
+              t.ownerType === TargetType.ACCOUNT &&
+              t.balanceType === BalanceType.PREVIOUS)
+            .map(t => (t.value, t.updated)).update(balance.value, timestamp)
+        }
+      }
+    } yield updatedRows).transactionally).map(_.sum)
+  }
+
+  def resetCounters(pageSize: Long, pageId: Long): Future[Int] = {
+    val timestamp = System.currentTimeMillis
+    db.run((for {
+      accountsToUpdate <- accounts.sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize).result
+      updatedRows <- DBIO.sequence {
+        accountsToUpdate.map(account => accounts.filter(_.id === account.id).map(t => (
+          t.likesCounter,
+          t.commentsCounter,
+          t.postsCounter,
+          t.likesCounterStarted,
+          t.postsCounterStarted,
+          t.commentsCounterStarted)).update(
+          0,
+          0,
+          0,
+          timestamp,
+          timestamp,
+          timestamp))
+      }
+    } yield updatedRows).transactionally).map(_.sum)
+  }
+
+  def updateTaskExecutionTime(taskId: Long): Future[Boolean] =
+    db.run(scheduledTasks.filter(_.id === taskId).map(_.executed).update(Some(System.currentTimeMillis))) map (_ == 1)
+
+  def getTaskLastExecution(taskId: Long): Future[Long] =
+    db.run(scheduledTasks.filter(_.id === taskId).result.headOption) map {
+      case Some(scheduledTask) => scheduledTask.executed.getOrElse(0L)
+      case _ => 0L
+    }
+
+  def transfer(fromAccountId: Long, toAccountId: Long, currency: Int, amount: Long, msgOpt: Option[String]): Future[Option[models.Transaction]] =
+    db.run((for {
+      tx <- (transactions returning transactions.map(_.id) into ((v, id) => Some(v.copy(id = id)))) += new models.daos.DBTransaction(
+        0,
+        System.currentTimeMillis,
+        None,
+        Some(System.currentTimeMillis),
+        TargetType.ACCOUNT,
+        TargetType.ACCOUNT,
+        Some(fromAccountId),
+        Some(toAccountId),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        TxType.USER_TO_USER,
+        msgOpt,
+        TxState.APPROVED,
+        currency,
+        amount)
+      _ <- updateCurrentAccountBalance(fromAccountId, currency, -amount)
+      _ <- updateCurrentAccountBalance(toAccountId, currency, amount)
+    } yield (tx)).transactionally) map (_.map(transactionFrom))
+
+  def promote(fromAccountId: Long, post: models.Post, amount: Long, msgOpt: Option[String]): Future[Option[models.Transaction]] =
+    db.run((for {
+      _ <- posts.filter(_.id === post.id).map(_.promo).update(post.promo + amount)
+      tx <- (transactions returning transactions.map(_.id) into ((v, id) => Some(v.copy(id = id)))) += new models.daos.DBTransaction(
+        0,
+        System.currentTimeMillis,
+        None,
+        Some(System.currentTimeMillis),
+        TargetType.ACCOUNT,
+        TargetType.SYSTEM,
+        Some(fromAccountId),
+        None,
+        None,
+        Some(TargetType.POST),
+        None,
+        Some(post.id),
+        None,
+        None,
+        TxType.PROMOTE_POST,
+        msgOpt,
+        TxState.APPROVED,
+        CurrencyType.DOLLAR,
+        amount)
+      _ <- updateCurrentAccountBalance(fromAccountId, CurrencyType.DOLLAR, -amount)
+    } yield (tx)).transactionally) map (_.map(transactionFrom))
+
+  def addValueToAccountBalance(
+    txType: Int,
+    userId: Long,
+    amount: Long,
+    currency: Int,
+    msg: Option[String],
+    fromRouteTypeOpt: Option[Int],
+    fromRouteIdOpt: Option[Long],
+    toRouteTypeOpt: Option[Int],
+    toRouteIdOpt: Option[Long]): Future[Option[models.Transaction]] =
+    db.run(addValueToAccountBalanceDBIOAction(
+      txType,
+      userId,
+      amount,
+      currency,
+      msg,
+      TargetType.SYSTEM,
+      None,
+      fromRouteTypeOpt,
+      fromRouteIdOpt,
+      toRouteTypeOpt,
+      toRouteIdOpt).transactionally)
+      .map(_.map(transactionFrom))
+
+  def findPostByComment(commentId: Long): Future[Option[models.Post]] = {
+    val query = for {
+      dbComment <- comments.filter(_.id === commentId)
+      dbPost <- posts.filter(_.id === dbComment.postId)
+    } yield dbPost
+    db.run(query.result.headOption).map(_.map(postFrom))
+  }
+
+  def createLikeToPostWithLikesCounterUpdate(
+    userId: Long,
+    postId: Long,
+    commentIdOpt: Option[Long]): Future[Option[models.Like]] = {
+    commentIdOpt.fold(createLikeToPostWithLikesCounterUpdate(
+      userId,
+      postId))(commentId => createLikeToPostWithLikesCounterUpdate(
+      userId,
+      postId,
+      commentId))
+  }
+
+  def addRewardOpt(
+    txType: Int,
+    userId: Long,
+    value: Long,
+    currency: Int,
+    msg: Option[String],
+    fromType: Int,
+    fromId: Option[Long],
+    routeTargetType: Option[Int],
+    routeTargetId: Option[Long]) =
+    if (value > 0)
+      addValueToAccountBalanceDBIOAction(
+        txType,
+        userId,
+        value,
+        currency,
+        msg,
+        fromType,
+        fromId,
+        routeTargetType,
+        routeTargetId,
+        None,
+        None)
+    else
+      DBIO.successful(None)
+
+  def createLikeToPostWithLikesCounterUpdate(
+    userId: Long,
+    postId: Long,
+    commentId: Long): Future[Option[models.Like]] = {
+
+    val query = for {
+      like <- (likes returning likes.map(_.id) into ((v, id) => v.copy(id = id))) += new models.daos.DBLike(
+        0,
+        userId,
+        TargetType.COMMENT,
+        commentId,
+        System.currentTimeMillis)
+      account <- accounts.filter(_.id === userId).result.head
+      _ <- accounts.filter(_.id === userId).map(_.likesCounter).update(account.commentsCounter + 1)
+      userPrevPowerBalance <- findPreviousAccountBalance(account.id, CurrencyType.POWER).map(_.value)
+      // rewards to liker - 0.5*DP
+      _ <- addRewardOpt(
+        TxType.LIKER_REWARD,
+        userId,
+        RewardLogic.likerRewardByLikePower(userPrevPowerBalance),
+        CurrencyType.POWER,
+        Some("Account POWER reward for like creation"),
+        TargetType.SYSTEM,
+        None,
+        Some(TargetType.POST),
+        Some(postId))
+      // rewards to comment owner 0.75*DP of actor
+      comment <- comments.filter(_.id === commentId).result.head
+      _ <- comments.filter(_.id === commentId).map(_.likesCount).update(comment.likesCount + 1)
+      commentOwner <- accounts.filter(_.id === comment.ownerId).result.head
+      _ <- {
+        val reward = RewardLogic.postRewardByLikePower(userPrevPowerBalance, models.RewardType.POWER)
+        addRewardOpt(
+          TxType.LIKE_REWARD,
+          commentOwner.id,
+          reward,
+          CurrencyType.POWER,
+          Some("Comment owner POWER reward by another user like"),
+          TargetType.SYSTEM,
+          None,
+          Some(TargetType.COMMENT),
+          Some(commentId)) flatMap (t => udateCommentReward(t, comment, reward, CurrencyType.POWER))
+      }
+      _ <- addRewardOpt(
+        TxType.LIKER_REWARD,
+        commentOwner.id,
+        RewardLogic.likerRewardByLikePower(userPrevPowerBalance),
+        CurrencyType.POWER,
+        Some("Liker POWER reward"),
+        TargetType.SYSTEM,
+        None,
+        Some(TargetType.COMMENT),
+        Some(commentId))
+      userActual <- accounts.filter(_.id === userId).result.head
+      (rewardPower, rewardDollar, rewardToken) <- comments.filter(_.id === commentId).map(t => (t.rewardPower, t.rewardDollar, t.rewardToken)).result.head
+    } yield (like, rewardPower, rewardDollar, rewardToken, userActual)
+
+    db.run(query.transactionally) map {
+      case (like, rewardPower, rewardDollar, rewardToken, userActual) =>
+        Some {
+          val likeModel = likeFrom(like)
+          likeModel.rewardOpt = Some(new models.Reward(Some(rewardPower)))
+          likeModel.ownerOpt = Some(accountFrom(userActual))
+          likeModel.userLoginOpt = Some(userActual.login)
+          likeModel.displayNameOpt = userActual.accountType match {
+            case AccountType.COMPANY => userActual.name
+            case _ => Some(userActual.login)
+          }
+          likeModel
+        }
+    }
+  }
+
+  // FIXME: check for balance must be atomic. But now in DB filed can't be negative.
+  def exchange(user: models.Account, currencyFrom: Int, currencyTo: Int, value: Long): Future[Boolean] = {
+    val timestamp = System.currentTimeMillis
+    val (scheduledOpt, approvedOpt, txState, amount) =
+      (currencyFrom, currencyTo) match {
+        case (CurrencyType.DOLLAR, CurrencyType.TOKEN) =>
+          (Some(timestamp + AppConstants.DOLLAR_TO_TOKEN_CHANGE_INTERVAL), None, TxState.SCHEDULED, RewardLogic.DOLLARInTOKEN(value))
+        case (CurrencyType.POWER, CurrencyType.TOKEN) =>
+          (Some(timestamp + AppConstants.POWER_TO_TOKEN_CHANGE_INTERVAL), None, TxState.SCHEDULED, RewardLogic.POWERInTOKEN(value))
+        case (CurrencyType.TOKEN, CurrencyType.POWER) =>
+          (None, Some(timestamp), TxState.APPROVED, RewardLogic.TOKENInPOWER(value))
+        case (CurrencyType.TOKEN, CurrencyType.DOLLAR) =>
+          (None, Some(timestamp), TxState.APPROVED, RewardLogic.TOKENInDOLLAR(value))
+        case _ => throw new UnsupportedOperationException("Unsupported exchange")
+      }
+    val query = for {
+      txMinus <- (transactions returning transactions.map(_.id) into ((v, id) => Some(v.copy(id = id)))) += new models.daos.DBTransaction(
+        0,
+        timestamp,
+        None,
+        Some(timestamp),
+        TargetType.ACCOUNT,
+        TargetType.SYSTEM,
+        Some(user.id),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        TxType.EXCHANGE_FROM,
+        Some("Exhange withdraw"),
+        TxState.APPROVED,
+        currencyFrom,
+        value)
+      txPlus <- (transactions returning transactions.map(_.id) into ((v, id) => Some(v.copy(id = id)))) += new models.daos.DBTransaction(
+        0,
+        timestamp,
+        scheduledOpt,
+        approvedOpt,
+        TargetType.SYSTEM,
+        TargetType.ACCOUNT,
+        None,
+        Some(user.id),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        TxType.EXCHANGE_TO,
+        Some("Exhange charge"),
+        txState,
+        currencyTo,
+        amount)
+      // withdraw
+      _ <- updateCurrentAccountBalance(user.id, currencyFrom, -value)
+      _ <- approvedOpt match {
+        case Some(approveTime) =>
+          updateCurrentAccountBalance(user.id, currencyTo, value)
+        case _ => DBIO.successful(0)
+      }
+    } yield (txMinus, txPlus)
+    db.run(query.transactionally) map (_ match {
+      case (Some(txm), Some(txp)) => true
+      case _ => false
+    })
+  }
+
+  def createLikeToPostWithLikesCounterUpdate(
+    userId: Long,
+    postId: Long): Future[Option[models.Like]] = {
+    val query = for {
+      like <- (likes returning likes.map(_.id) into ((v, id) => v.copy(id = id))) += new models.daos.DBLike(
+        0,
+        userId,
+        TargetType.POST,
+        postId,
+        System.currentTimeMillis)
+      user <- accounts.filter(_.id === userId).result.head
+      _ <- accounts.filter(_.id === userId).map(_.likesCounter).update(user.commentsCounter + 1)
+      userPrevPowerBalance <- findPreviousAccountBalance(userId, CurrencyType.POWER).map(_.value)
+      // rewards to liker - 0.5*DP
+      _ <- {
+        val reward = RewardLogic.likerRewardByLikePower(userPrevPowerBalance)
+        if (reward > 0) {
+          addValueToAccountBalanceDBIOAction(
+            TxType.LIKER_REWARD,
+            userId,
+            reward,
+            CurrencyType.POWER,
+            Some("Account POWER reward for like creation"),
+            TargetType.SYSTEM,
+            None,
+            Some(TargetType.POST),
+            Some(postId),
+            None,
+            None)
+        } else DBIO.successful(None)
+      }
+      // rewards to post owner 0.75*DP of actor
+      post <- posts.filter(_.id === postId).result.head
+      _ <- posts.filter(_.id === postId).map(_.likesCount).update(post.likesCount + 1)
+      postOwner <- accounts.filter(_.id === post.ownerId).result.head
+      _ <- {
+        val reward = RewardLogic.postRewardByLikePower(userPrevPowerBalance, post.rewardType)
+        addRewardOpt(
+          TxType.LIKE_REWARD,
+          postOwner.id,
+          reward,
+          CurrencyType.POWER,
+          Some("Post owner POWER reward by another user like"),
+          TargetType.SYSTEM,
+          None,
+          Some(TargetType.POST),
+          Some(postId)) flatMap (t => udatePostReward(t, post, reward, CurrencyType.POWER))
+      }
+      _ <- {
+        val reward = RewardLogic.postRewardByLikeDollars(userPrevPowerBalance, post.rewardType)
+        addRewardOpt(
+          TxType.LIKE_REWARD,
+          postOwner.id,
+          reward,
+          CurrencyType.DOLLAR,
+          Some("Post owner DOLLAR reward by another user like"),
+          TargetType.SYSTEM,
+          None,
+          Some(TargetType.POST),
+          Some(postId)) flatMap (t => udatePostReward(t, post, reward, CurrencyType.DOLLAR))
+      }
+      (rewardPower, rewardDollar, rewardToken) <- posts.filter(_.id === postId).map(t => (t.rewardPower, t.rewardDollar, t.rewardToken)).result.head
+    } yield (like, rewardPower, rewardDollar, rewardToken, user)
+
+    db.run(query.transactionally) map {
+      case (like, rewardPower, rewardDollar, rewardToken, user) =>
+        Some {
+          val likeModel = likeFrom(like)
+          likeModel.rewardOpt = Some(new models.Reward(Some(rewardPower), Some(rewardDollar)))
+          likeModel.ownerOpt = Some(accountFrom(user))
+          likeModel.userLoginOpt = Some(user.login)
+          likeModel.displayNameOpt = user.accountType match {
+            case AccountType.COMPANY => user.name
+            case _ => Some(user.login)
+          }
+          likeModel
+        }
+    }
+  }
+
+  def approveTransaction(txId: Long): Future[Option[models.Transaction]] = {
+    val timestamp = System.currentTimeMillis
+    val query = for {
+      _ <- transactions.filter(t => t.id === txId && t.scheduled.isDefined && t.scheduled <= timestamp && t.toType === TargetType.ACCOUNT)
+        .map(t => (t.scheduled, t.state, t.processed))
+        .update(None, TxState.APPROVED, Some(timestamp))
+      tx <- transactions.filter(_.id === txId).result.head
+      user <- accounts.filter(_.id === tx.toId.get).result.head
+      _ <- updateCurrentAccountBalance(user.id, tx.currencyId, tx.amount)
+    } yield tx
+    db.run(query.transactionally).map(t => Some(transactionFrom(t)))
+  }
+
+  def findTransactionById(txId: Long): Future[Option[models.Transaction]] =
+    db.run(transactions.filter(_.id === txId).result.headOption).map(_.map(transactionFrom))
+
+  def createCommentToPostWithCommentsCounterUpdate(
+    postId: Long,
+    commentIdOpt: Option[Long],
+    userId: Long,
+    content: String,
+    rewardType: Int): Future[Option[models.Comment]] = {
+
+    val query = for {
+      userOpt <- accounts.filter(_.id === userId).result.headOption
+      commentOpt <- DBIO.sequenceOption(userOpt.map { user =>
+        (comments returning comments.map(_.id) into ((v, id) => v.copy(id = id))) += new models.daos.DBComment(
+          0,
+          postId,
+          userId,
+          commentIdOpt,
+          content,
+          models.ContentType.TEXT,
+          System.currentTimeMillis,
+          0, 0, 0, 0, models.CommentStatus.VISIBLE)
+      })
+      _ <- userOpt match {
+        case Some(user) =>
+          accounts.filter(_.id === userId).map(_.commentsCounter).update(user.commentsCounter + 1)
+        case _ => DBIO.successful(None)
+      }
+
+      post <- posts.filter(_.id === postId).result.head
+
+      _ <- posts.filter(_.id === postId).map(_.commentsCount).update(post.commentsCount + 1)
+
+      actualCommentOpt <- commentOpt match {
+        case Some(comment) =>
+          comments.filter(_.id === comment.id).result.headOption
+        case _ => DBIO.successful(None)
+      }
+      actualAccountOpt <- accounts.filter(_.id === userId).result.headOption
+    } yield (actualCommentOpt, actualAccountOpt)
+
+    db.run(query.transactionally) map {
+      case (Some(actualComment), Some(user)) =>
+        val comment = commentFrom(actualComment)
+        comment.ownerOpt = Some(accountFrom(user))
+        Some(comment)
+      case _ => None
+    }
+  }
+
+  def addValueToAccountBalanceDBIOAction(
+    txType: Int,
+    userId: Long,
+    amount: Long,
+    currency: Int,
+    msg: Option[String],
+    fromType: Int,
+    fromId: Option[Long],
+    fromRouteTypeOpt: Option[Int],
+    fromRouteIdOpt: Option[Long],
+    toRouteTypeOpt: Option[Int],
+    toRouteIdOpt: Option[Long]) =
+    for {
+      tx <- (transactions returning transactions.map(_.id) into ((v, id) => Some(v.copy(id = id)))) += new models.daos.DBTransaction(
+        0,
+        System.currentTimeMillis,
+        None,
+        Some(System.currentTimeMillis),
+        fromType,
+        //TargetType.SYSTEM,
+        TargetType.ACCOUNT,
+        fromId,
+        //None,
+        Some(userId),
+        fromRouteTypeOpt,
+        toRouteTypeOpt,
+        fromRouteIdOpt,
+        toRouteIdOpt,
+        None,
+        None,
+        txType,
+        msg,
+        TxState.APPROVED,
+        currency,
+        amount)
+      _ <- updateCurrentAccountBalance(userId, currency, amount)
+    } yield tx
+
+  def findAccountByConfirmCodeAndLogin(login: String, code: String): Future[Option[models.Account]] =
+    getAccountFromQuery(accounts.filter(t => t.login === login && t.confirmCode === code))
+
+  def emailVerified(login: String, code: String, password: String): Future[Option[Account]] =
+    db.run(accounts.filter(t => t.login === login && t.confirmCode === code)
+      .map(t => (t.confirmCode, t.accountStatus, t.hash))
+      .update(None, ConfirmationStatus.CONFIRMED, Some(BCrypt.hashpw(password, BCrypt.gensalt())))).flatMap { raws =>
+      if (raws == 1) findAccountByLogin(login) else Future.successful(None)
+    }
+
+  def createAccount(
+    login: String,
+    email: String,
+    balanceDp: Long,
+    accountType: Int,
+    companyNameOpt: Option[String]): Future[Option[models.Account]] = {
+    val timestamp = System.currentTimeMillis()
+    val query = for {
+      dbAccount <- (accounts returning accounts.map(_.id) into ((v, id) => v.copy(id = id))) += new models.daos.DBAccount(
+        0,
+        login,
+        email,
+        None /*Some(BCrypt.hashpw(password, BCrypt.gensalt()))*/ ,
+        None,
+        None,
+        ConfirmationStatus.WAIT_CONFIRMATION,
+        AccountStatus.NORMAL,
+        companyNameOpt, None, None, 0, System.currentTimeMillis,
+        Some(BCrypt.hashpw(Random.nextString(5) + login + System.currentTimeMillis.toString, BCrypt.gensalt()).replaceAll("\\.", "s")),
+        0, 0, 0, 0, 0, 0, 0,
+        None,
+        accountType)
+      dbTx <- (transactions returning transactions.map(_.id) into ((v, id) => v.copy(id = id))) += new models.daos.DBTransaction(
+        0,
+        System.currentTimeMillis,
+        None,
+        Some(System.currentTimeMillis),
+        TargetType.SYSTEM,
+        TargetType.ACCOUNT,
+        None,
+        Some(dbAccount.id),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        TxType.REGISTER_REWARD,
+        Some("Account POWER reward for registration"),
+        TxState.APPROVED,
+        CurrencyType.POWER,
+        balanceDp)
+      _ <- balances += new DBBalance(0, dbAccount.id, TargetType.ACCOUNT, CurrencyType.POWER, timestamp, BalanceType.CURRENT, balanceDp)
+      _ <- balances += new DBBalance(0, dbAccount.id, TargetType.ACCOUNT, CurrencyType.POWER, timestamp, BalanceType.PREVIOUS, balanceDp)
+      _ <- balances += new DBBalance(0, dbAccount.id, TargetType.ACCOUNT, CurrencyType.TOKEN, timestamp, BalanceType.CURRENT, 0)
+      _ <- balances += new DBBalance(0, dbAccount.id, TargetType.ACCOUNT, CurrencyType.TOKEN, timestamp, BalanceType.PREVIOUS, 0)
+      _ <- balances += new DBBalance(0, dbAccount.id, TargetType.ACCOUNT, CurrencyType.DOLLAR, timestamp, BalanceType.CURRENT, 0)
+      _ <- balances += new DBBalance(0, dbAccount.id, TargetType.ACCOUNT, CurrencyType.DOLLAR, timestamp, BalanceType.PREVIOUS, 0)
+    } yield (dbAccount, dbTx)
+    db.run(query.transactionally) flatMap {
+      case (dbAccount, dbTx) =>
+        addRolesToAccount(dbAccount.id, Roles.CLIENT) map (t => Some(accountFrom(dbAccount, models.Roles.CLIENT)))
+    }
+  }
+
+  def getStats: Future[models.Stats] = {
+    val query = for {
+      dbAccounts <- accounts.length.result
+      dbUsers <- accounts.filter(_.accountType === models.AccountType.USER).length.result
+      dbCompanies <- accounts.filter(_.accountType === models.AccountType.COMPANY).length.result
+      dbTokens <- balances.filter(t => t.balanceType === BalanceType.CURRENT && t.currencyId === CurrencyType.TOKEN).map(_.value).sum.result
+      dbDollars <- balances.filter(t => t.balanceType === BalanceType.CURRENT && t.currencyId === CurrencyType.DOLLAR).map(_.value).sum.result
+      dbPower <- balances.filter(t => t.balanceType === BalanceType.CURRENT && t.currencyId === CurrencyType.POWER).map(_.value).sum.result
+      dbPosts <- posts.filter(t => t.postType === TargetType.ARTICLE || t.postType === TargetType.REVIEW).length.result
+      dbProducts <- posts.filter(_.postType === PostType.PRODUCT).length.result
+
+    } yield (dbAccounts, dbUsers, dbCompanies, dbTokens, dbDollars, dbPower, dbPosts, dbProducts)
+    db.run(query) map {
+      case (dbAccounts, dbUsers, dbCompanies, dbTokens, dbDollars, dbPower, dbPosts, dbProducts) =>
+        new models.Stats(dbAccounts, dbUsers, dbCompanies, dbTokens.getOrElse(0), dbDollars.getOrElse(0), dbPower.getOrElse(0), dbPosts, dbProducts)
+    }
+  }
+
+  def addRolesToAccount(userId: Long, rolesIn: Int*): Future[Unit] =
+    db.run(DBIO.seq(roles ++= rolesIn.map(r => DBRole(userId, r))).transactionally)
+
+  ////////////// HELPERS ////////////////
+
+  @inline final def someToSomeFlatMap[T1, T2](f1: Future[Option[T1]], f2: T1 => Future[Option[T2]]): Future[Option[T2]] =
+    f1 flatMap (_ match {
+      case Some(r) => f2(r)
+      case None => Future.successful(None)
+    })
+
+  @inline final def someToSomeFlatMapElse[T](f1: Future[Option[_]], f2: Future[Option[T]]): Future[Option[T]] =
+    f1 flatMap (_ match {
+      case Some(r) => Future.successful(None)
+      case None => f2
+    })
+
+  @inline final def someToBooleanFlatMap[T](f1: Future[Option[T]], f2: T => Future[Boolean]): Future[Boolean] =
+    f1 flatMap (_ match {
+      case Some(r) => f2(r)
+      case None => Future.successful(false)
+    })
+
+  @inline final def someToSeqFlatMap[T1, T2](f1: Future[Option[T1]], f2: T1 => Future[Seq[T2]]): Future[Seq[T2]] =
+    f1 flatMap (_ match {
+      case Some(r) => f2(r)
+      case None => Future.successful(Seq.empty[T2])
+    })
+
+  @inline final def seqToSeqFlatMap[T1, T2](f1: Future[Seq[T1]], f2: T1 => Future[T2]): Future[Seq[T2]] =
+    f1 flatMap { rs =>
+      Future.sequence {
+        rs map { r =>
+          f2(r)
+        }
+      }
+    }
+
+}
+
+
