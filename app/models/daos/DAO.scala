@@ -1537,7 +1537,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
         Some(BCrypt.hashpw(Random.nextString(5) + login + System.currentTimeMillis.toString, BCrypt.gensalt())
             .replaceAll("\\.", "s")
             .replaceAll("\\\\", "d")
-            .replaceAll("\\$", "g").toList.map(_.toInt.toHexString).mkString),
+            .replaceAll("\\$", "g").toList.map(_.toInt.toHexString).mkString.substring(0,99)),
         0, 0, 0, 0, 0, 0, 0,
         None,
         accountType)
