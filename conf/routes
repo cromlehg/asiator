@@ -16,6 +16,11 @@ GET    /app/posts/list/filter/page/:pageId           controllers.sside.PostsCont
 
 GET    /app/posts/post/:postId                       controllers.sside.PostsController.viewPost(postId: Long)
 
+GET    /app/posts/create                             controllers.sside.PostsController.createPost()
+
++ nocsrf
+POST   /app/posts/create                             controllers.sside.PostsController.processCreatePost()
+
 GET    /app/login                                    controllers.sside.AccountsController.login()
 
 + nocsrf

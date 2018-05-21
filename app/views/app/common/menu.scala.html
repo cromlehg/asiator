@@ -22,8 +22,8 @@
               <img src="@ac.authorizedOpt.flatMap(_.avatar).getOrElse("/assets/images/avatar.png")" class="rounded-circle" alt="avatar" width="36" height="36">
             </a>
             <div class="dropdown-menu" aria-labelledby="ibs-register-submenu">
-              <a class="dropdown-item" href="@sside.routes.AccountsController.registerUser()">User</a>
-              <a class="dropdown-item" href="@sside.routes.AccountsController.registerCompany()">Company</a>
+              <a class="dropdown-item" href="@sside.routes.AccountsController.blog(ac.authorizedOpt.get.id, 1)">Профиль</a>
+              <a class="dropdown-item" href="@sside.routes.PostsController.createPost()">Новый пост</a>
             </div>
           </li>        
         }
@@ -31,14 +31,14 @@
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="http://example.com" id="ibs-register-submenu" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
               <i class="fa fa-user-plus"></i>
-              <span>sign up</span>
+              <span>регистрация</span>
             </a>
             <div class="dropdown-menu" aria-labelledby="ibs-register-submenu">
-              <a class="dropdown-item" href="@sside.routes.AccountsController.registerUser()">User</a>
-              <a class="dropdown-item" href="@sside.routes.AccountsController.registerCompany()">Company</a>
+              <a class="dropdown-item" href="@sside.routes.AccountsController.registerUser()">Пользователь</a>
+              <a class="dropdown-item" href="@sside.routes.AccountsController.registerCompany()">Компания</a>
             </div>
           </li>
-          @base.common.menuItem(active, "login", sside.routes.AccountsController.login(), Some("sign-in-alt"))
+          @base.common.menuItem(active, "войти", sside.routes.AccountsController.login(), Some("sign-in-alt"))
         }
       </ul>
     </div>

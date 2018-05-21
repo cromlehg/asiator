@@ -72,7 +72,7 @@ class Post(
 
   var reviews: Seq[Post] = Seq.empty
 
-  val pattern = """\[.*?\]\s*\(\s*(.*?)\s*(\".*?\")?\s*\)""".r
+  val pattern = """!\[.*?\]\s*\(\s*(.*?)\s*(\".*?\")?\s*\)""".r
 
   val renderFromMarkdownToHTML =
     ContentCompilerHelper.compile(content)

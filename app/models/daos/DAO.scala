@@ -657,13 +657,12 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
 
   def createPostWithPostsCounterUpdate(
     userId: Long,
-    productIdOpt: Option[Long],
+    targetIdOpt: Option[Long],
     title: String,
     content: String,
     thumbnail: Option[String],
     rewardType: Int,
     postType: Int,
-    limit: Option[Long],
     tagNames: Seq[String]): Future[Option[models.Post]] = {
 
     val query = for {
@@ -671,7 +670,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       post <- (posts returning posts.map(_.id) into ((v, id) => v.copy(id = id))) += new models.daos.DBPost(
         0,
         userId,
-        productIdOpt,
+        targetIdOpt,
         title,
         thumbnail,
         content,
@@ -691,16 +690,16 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
         0,
         0,
         0)
-      productReviewsCountOpt <- productIdOpt match {
-        case Some(productId) =>
-          posts.filter(t => t.id === productId && t.postType === PostType.PRODUCT)
+      targetPostsCountOpt <- targetIdOpt match {
+        case Some(targetId) =>
+          posts.filter(t => t.id === targetId && t.postType === PostType.PRODUCT)
             .map(_.postsCount).result.headOption
         case _ => DBIO.successful(None)
       }
-      _ <- productReviewsCountOpt match {
-        case Some(productReviewsCount) =>
-          posts.filter(t => t.id === productIdOpt.get && t.postType === PostType.PRODUCT)
-            .map(_.postsCount).update(productReviewsCount + 1)
+      _ <- targetPostsCountOpt match {
+        case Some(targetPostsCount) =>
+          posts.filter(t => t.id === targetIdOpt.get && t.postType === PostType.PRODUCT)
+            .map(_.postsCount).update(targetPostsCount + 1)
         case _ => DBIO.successful(None)
       }
       _ <- accounts.filter(_.id === userId)
