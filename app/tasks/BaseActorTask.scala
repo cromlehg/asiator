@@ -88,14 +88,15 @@ class BaseActorTask @Inject() (actorSystem: ActorSystem, val dao: DAO, config: C
           Future.sequence(for (i <- 1 to count.toInt) yield dao.resetCounters(pageSize, i))
         } flatMap { r =>
           Logger.debug("Reset counters successfully finished. Start to update balances...")
-          dao.getAccountBalancesPages(pageSize) map { countBalances =>
-            Future.sequence(for (i <- 1 to countBalances.toInt) yield dao.updateBalances(pageSize, i))
-          } map { r =>
-            Logger.debug("Update balances successfully finished")
-            dao.updateTaskExecutionTime(TaskType.REWARDER)
-          } map { r =>
-            Logger.debug("Update rewarder task time successfully finished")
-          }
+          Future.successful(r)
+//          dao.getAccountBalancesPages(pageSize) map { countBalances =>
+//            Future.sequence(for (i <- 1 to countBalances.toInt) yield dao.updateBalances(pageSize, i))
+//          } map { r =>
+//            Logger.debug("Update balances successfully finished")
+//            dao.updateTaskExecutionTime(TaskType.REWARDER)
+//          } map { r =>
+//            Logger.debug("Update rewarder task time successfully finished")
+//          }
         }
       } else {
         Logger.debug("Update balances not started because interval not reached")

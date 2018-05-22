@@ -29,9 +29,7 @@ CREATE TABLE comments (
   content_type              INT UNSIGNED NOT NULL,
   created                   BIGINT UNSIGNED NOT NULL,
   likes_count               INT UNSIGNED NOT NULL,
-  reward_token              BIGINT UNSIGNED NOT NULL,
-  reward_power              BIGINT UNSIGNED NOT NULL,
-  reward_dollar             BIGINT UNSIGNED NOT NULL,
+  reward                    BIGINT UNSIGNED NOT NULL,
   status                    INT UNSIGNED NOT NULL
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 
@@ -87,10 +85,7 @@ CREATE TABLE posts (
   posts_count               INT UNSIGNED,
   created                   BIGINT UNSIGNED NOT NULL,
   views_count               INT UNSIGNED NOT NULL,
-  reward_type               INT UNSIGNED NOT NULL,
-  reward_token              BIGINT UNSIGNED NOT NULL,
-  reward_power              BIGINT UNSIGNED NOT NULL,
-  reward_dollar             BIGINT UNSIGNED NOT NULL,
+  reward                    BIGINT UNSIGNED NOT NULL,
   rate                      INT UNSIGNED NOT NULL,
   rate_count                INT UNSIGNED NOT NULL
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;

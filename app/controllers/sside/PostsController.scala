@@ -55,8 +55,6 @@ import models.AccountType
 import models.CommentsViewType
 import models.CurrencyType
 import models.ErrCodes
-import models.PostType
-import models.RewardType
 import models.TargetType
 import models.daos.DAO
 import play.Logger
@@ -99,8 +97,7 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
                 post.title,
                 post.content,
                 None,
-                RewardType.DOLLAR,
-                PostType.ARTICLE,
+                TargetType.ARTICLE,
                 Seq.empty[String]) flatMap { createdPostOpt =>
                 createdPostOpt match {
                   case Some(createdPost) =>

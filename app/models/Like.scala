@@ -17,7 +17,7 @@ class Like(
 
   var ownerOpt: Option[Account] = None
 
-  var rewardOpt: Option[Reward] = None
+  var rewardOpt: Option[Long] = None
 
   def createdShortDate = formattedShortDate(created)
 
@@ -31,7 +31,7 @@ class Like(
     jsObj = userLoginOpt.fold(jsObj)(t => jsObj ++ Json.obj("login" -> t))
     jsObj = displayNameOpt.fold(jsObj)(t => jsObj ++ Json.obj("display_name" -> t))
     jsObj = ownerOpt.fold(jsObj)(user => jsObj + ("owner" -> user.toJson))
-    jsObj = rewardOpt.fold(jsObj)(t => jsObj ++ t.toJson)
+    jsObj = rewardOpt.fold(jsObj)(t => jsObj ++ Json.obj("reward" -> t))
     jsObj
   }
 

@@ -47,9 +47,7 @@ trait TraitDTOToModel {
       dto.contentType,
       dto.created,
       dto.likesCount,
-      dto.rewardToken,
-      dto.rewardPower,
-      dto.rewardDollar,
+      dto.reward,
       dto.status)
 
   def tagFrom(dto: DBTag) =
@@ -129,10 +127,7 @@ trait TraitDTOToModel {
       dto.postsCount,
       dto.created,
       dto.viewsCount,
-      dto.rewardType,
-      dto.rewardToken,
-      dto.rewardPower,
-      dto.rewardDollar,
+      dto.reward,
       dto.rate,
       dto.rateCount)
 

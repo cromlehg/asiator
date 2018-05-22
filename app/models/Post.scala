@@ -53,10 +53,7 @@ class Post(
   val reviewsCount:  Int,
   val created:       Long,
   val viewsCount:    Int,
-  val rewardType:    Int,
-  val rewardToken:   Long,
-  val rewardPower:   Long,
-  val rewardDollar:  Long,
+  val reward:        Long,
   val rate:          Int,
   val rateCount:     Int) extends TraitDateSupports {
 
@@ -89,10 +86,6 @@ class Post(
 
   val createdShortDate = formattedShortDate(created)
 
-  lazy val reward = new Reward(Some(rewardPower), Some(rewardDollar))
-
-  def rewardsToJson(implicit ac: AppContext) = reward.toJson
-
   lazy val createdPrettyTime = ContentCompilerHelper.prettyTime.format(new Date(created))
 
   def toJson()(implicit ac: AppContext): JsObject = {
@@ -100,17 +93,16 @@ class Post(
       "id" -> id,
       "owner_id" -> ownerId,
       "title" -> title,
-      "post_type" -> PostType.strById(postType),
+      "post_type" -> TargetType.strById(postType),
       "likes_count" -> likesCount,
       "comments_count" -> commentsCount,
       "created" -> created,
       "promo" -> promo,
       "views_count" -> viewsCount,
       "reviews_count" -> reviewsCount,
-      "reward_type" -> RewardType.strById(rewardType),
+      "reward" -> reward,
       "description" -> description,
       "rate" -> { if (rate == 0 || rateCount == 0) 0 else rate / rateCount }.toInt)
-    jsObj = jsObj ++ rewardsToJson
     jsObj = titleRefOpt.fold(jsObj)(t => jsObj ++ Json.obj("product_title" -> t))
     jsObj = targetId.fold(jsObj)(t => jsObj ++ Json.obj("product_id" -> t))
     jsObj = likedOpt.fold(jsObj)(liked => jsObj ++ Json.obj("liked" -> liked))

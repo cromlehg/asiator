@@ -44,8 +44,6 @@ import models.AccountType
 import models.CommentsViewType
 import models.CurrencyType
 import models.ErrCodes
-import models.PostType
-import models.RewardType
 import models.TargetType
 import models.daos.DAO
 import play.Logger

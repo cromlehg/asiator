@@ -56,9 +56,7 @@ trait DBTableDefinitions {
     def contentType = column[Int]("content_type")
     def created = column[Long]("created")
     def likesCount = column[Int]("likes_count")
-    def rewardToken = column[Long]("reward_token")
-    def rewardPower = column[Long]("reward_power")
-    def rewardDollar = column[Long]("reward_dollar")
+    def reward = column[Long]("reward")
     def status = column[Int]("status")
     def * = (
         id, 
@@ -69,9 +67,7 @@ trait DBTableDefinitions {
         contentType, 
         created, 
         likesCount,
-        rewardToken,
-        rewardPower,
-        rewardDollar,
+        reward,
         status) <> (DBComment.tupled, DBComment.unapply)
   }
 
@@ -259,10 +255,7 @@ trait DBTableDefinitions {
     def postsCount = column[Int]("posts_count")
     def created = column[Long]("created")
     def viewsCount = column[Int]("views_count")
-    def rewardType = column[Int]("reward_type")
-    def rewardToken = column[Long]("reward_token")
-    def rewardPower = column[Long]("reward_power")
-    def rewardDollar = column[Long]("reward_dollar")
+    def reward = column[Long]("reward")
     def rate = column[Int]("rate")
     def rateCount = column[Int]("rate_count")
     def * = (
@@ -282,10 +275,7 @@ trait DBTableDefinitions {
       postsCount,
       created,
       viewsCount,
-      rewardType,
-      rewardToken,
-      rewardPower,
-      rewardDollar,
+      reward,
       rate,
       rateCount)   <> (DBPost.tupled, DBPost.unapply)
   }

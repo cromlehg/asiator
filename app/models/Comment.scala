@@ -14,9 +14,7 @@ class Comment(
   val contentType:  Int,
   val created:      Long,
   val likesCount:   Int,
-  val rewardToken:  Long,
-  val rewardPower:  Long,
-  val rewardDollar: Long,
+  val reward: Long,
   val status:       Int) extends TraitDateSupports {
 
   var parentOpt: Option[Comment] = None
@@ -30,8 +28,6 @@ class Comment(
   var likedOpt: Option[Boolean] = None
 
   val createdDate = formattedShortDate(created)
-
-  def rewardsToJson(implicit ac: AppContext) = new Reward(Some(rewardPower)).toJson
 
   def buildTree(comments: Seq[Comment]) {
     nested = comments.filter(_.parentId.fold(false)(_ == id)).sortBy(_.id).reverse
@@ -50,9 +46,9 @@ class Comment(
       "content" -> content,
       "content_type" -> ContentType.strById(contentType),
       "created" -> created,
+      "reward" -> reward,
       "likes_count" -> likesCount,
       "status" -> CommentStatus.strById(status))
-    jsObj = jsObj ++ rewardsToJson
     jsObj = ownerOpt.fold(jsObj)(user => jsObj + ("owner" -> user.toJson))
     jsObj = likedOpt.fold(jsObj)(liked => jsObj ++ Json.obj("liked" -> liked))
     jsObj = if (likes.nonEmpty) jsObj + ("likes" -> JsArray(likes.map(_.toJson))) else jsObj
