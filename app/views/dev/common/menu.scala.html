@@ -6,7 +6,7 @@
   </button>
   <div class="collapse navbar-collapse" id="navbarCollapse">
     <ul class="navbar-nav mr-auto">
-      @base.common.menuItem(active, "status", routes.AppController.status())
+      @base.common.menuItem(active, "status", sside.routes.AppController.status())
       @base.common.menuItem(active, "balance", sside.routes.BalancesController.balances(1))
       @base.common.menuItem(active, "app", sside.routes.PostsController.posts(1))
     </ul>

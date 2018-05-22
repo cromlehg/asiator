@@ -4,9 +4,9 @@
 # ~~~~
 
 # An example controller showing a sample home page
-GET    /                                             controllers.AppController.index
+GET    /                                             controllers.sside.AppController.index
 
-GET    /dev/status                                   controllers.AppController.status
+GET    /dev/status                                   controllers.sside.AppController.status
 
 GET    /dev/balances/list/page/:pageId               controllers.sside.BalancesController.balances(pageId: Long)
 
