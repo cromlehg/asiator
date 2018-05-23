@@ -1,27 +1,21 @@
-@()(implicit flash: Flash, messages: Messages, ac: controllers.AppContext)
+@()(implicit flash: Flash, messages: Messages, ac: controllers.AppContext, req: play.api.mvc.RequestHeader)
 
 @app.common.main("index") { } {
   @base.common.components.container() {    
   
+  
 <style>
-
+/*
 .row {
     border: 1px solid black;
     background: gray;
 }
-
+*/
 </style> 
   
   
-<div class="row">
-  <div class="col-12 col-md-6 col-lg-3">
-  
-  </div>
-  <div class="col-12 col-md-6 col-lg-3">
-  
-  </div>
-  <div class="col-12 col-md-6 col-lg-3"></div>
-  <div class="col-12 col-md-6 col-lg-3"></div>
+<div class="row" id="top-feed">
+
 </div>
 
 <div class="row">
@@ -44,4 +38,23 @@
   
           
   }
-} { }
+} {
+
+@helper.javascriptRouter("jsRoutes")(
+  sside.routes.javascript.PostsController.findPostsByCategory
+)
+
+<script type="text/javascript">
+  $(document).ready(function(){
+	jsRoutes.controllers.sside.PostsController.findPostsByCategory().ajax({
+	  data: JSON.stringify({page_id: 1}),
+	  contentType: 'text/json'
+	}).done(data => {
+	  $('#top-feed').append(data);
+    }).fail(data => {
+      alert(data.responseText);
+    });   
+  })
+</script>
+
+}

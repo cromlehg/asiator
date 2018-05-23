@@ -67,12 +67,15 @@ import play.api.mvc.Result
 import play.twirl.api.Html
 import play.api.mvc.Action
 import controllers.AppConstants
+import controllers.JSONSupport
 
 @Singleton
 class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Config)(implicit ec: ExecutionContext)
-  extends Authorizable(cc, dao, config) {
+  extends Authorizable(cc, dao, config) with JSONSupport {
 
   import scala.concurrent.Future.{ successful => future }
+
+  implicit val ac = new AppContext()
 
   case class PostPostData(val title: String, val content: String)
 
@@ -82,7 +85,6 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
       "content" -> nonEmptyText(500))(PostPostData.apply)(PostPostData.unapply))
 
   def processCreatePost() = Action.async { implicit request =>
-    implicit val ac = new AppContext()
     onlyAuthorized { account =>
 
       def redirectWithError(msg: String, form: Form[_]) =
@@ -92,13 +94,13 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
         formWithErrors => Future(BadRequest(views.html.app.createPost(formWithErrors))), {
           post =>
             dao.createPostWithPostsCounterUpdate(
-                account.id, 
-                None,
-                post.title,
-                post.content,
-                None,
-                TargetType.ARTICLE,
-                Seq.empty[String]) flatMap { createdPostOpt =>
+              account.id,
+              None,
+              post.title,
+              post.content,
+              None,
+              TargetType.ARTICLE,
+              Seq.empty[String]) flatMap { createdPostOpt =>
                 createdPostOpt match {
                   case Some(createdPost) =>
                     Future.successful(Redirect(controllers.sside.routes.PostsController.viewPost(createdPost.id))
@@ -114,14 +116,12 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
   }
 
   def createPost() = Action.async { implicit request =>
-    implicit val ac = new AppContext()
     onlyAuthorized { account =>
       Future(Ok(views.html.app.createPost(createPostForm)))
     }
   }
 
   def posts(pageId: Long) = Action.async { implicit request =>
-    implicit val ac = new AppContext()
     optionalAuthorized { accountOpt =>
       dao.findPostsWithAccountsByCategoryTagIds(None, None, pageId, None) map { posts =>
         Ok(views.html.app.posts(posts, Some(PostsFilter.NEW)))
@@ -130,7 +130,6 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
   }
 
   def postsByFilter(pageId: Long, filter: String) = Action.async { implicit request =>
-    implicit val ac = new AppContext()
     optionalAuthorized { accountOpt =>
       dao.findPostsWithAccountsByCategoryTagIds(None, Some(filter), pageId, None) map { posts =>
         Ok(views.html.app.posts(posts, Some(filter)))
@@ -139,7 +138,6 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
   }
 
   def viewPost(postId: Long) = Action.async { implicit request =>
-    implicit val ac = new AppContext()
     optionalAuthorized { accountOpt =>
       dao.findPostWithAccountByPostId(postId) flatMap (
         _.fold(future(NotFound(""))) { post =>
@@ -149,6 +147,64 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
         })
     }
   }
+
+  def findPostsByCategory() = Action.async(parse.json) { implicit request =>
+    fieldLong("page_id")(pageId => fieldStringOpt("filter") { filterName =>
+      optionalAuthorized { optUser =>
+        fieldSeqStringOptOpt("tags") { tagNamesOpt: Option[Seq[String]] =>
+          val tagNamesOptPrepared = tagNamesOpt.map(_.map(_.trim.toLowerCase))
+          if (tagNamesOptPrepared.isDefined && tagNamesOptPrepared.get.length > AppConstants.TAGS_PER_POST_LIMIT) future(BadRequest("You have more than " + AppConstants.TAGS_PER_POST_LIMIT + " tags"))
+          else if (tagNamesOptPrepared.isDefined && tagNamesOptPrepared.get.exists(_.length < AppConstants.TAG_SIZE_LIMIT)) future(BadRequest("Each tag length should be more than " + (AppConstants.TAG_SIZE_LIMIT - 1))) else {
+            val userIdOpt = optUser.map(_.id)
+            withAccountNameOrIdSingleOpt(idOpt =>
+              dao.findPostsWithAccountsByCategoryTagNames(userIdOpt, idOpt, filterName, pageId, tagNamesOptPrepared) map { posts =>
+                Ok(views.html.app.common.postsListThumb1(posts))
+              })
+          }
+        }
+      }
+    })
+  }
+
+  private def withNameOrId(
+    idFieldName: String,
+    nameFieldName: String,
+    idByName: String => Future[Option[Long]],
+    f: Long => Future[Result])(implicit request: Request[JsValue], ac: AppContext): Future[Result] =
+    fieldLongOpt(idFieldName)(_.fold(
+      fieldString(nameFieldName) { str =>
+        val preapred = str.trim()
+        if (preapred.length < 1) future(BadRequest("Should be 1 symbol at least")) else
+          idByName(preapred) flatMap (_.fold(future(BadRequest("Not found")))(f))
+      })(f))
+
+  private def withNameOrIdOpt(
+    idFieldName: String,
+    nameFieldName: String,
+    idByName: String => Future[Option[Long]])(
+    f1: Long => Future[Result])(
+    f2: Future[Result])(implicit request: Request[JsValue], ac: AppContext): Future[Result] =
+    fieldLongOpt(idFieldName)(_.fold(fieldStringOpt(nameFieldName)(_.fold(f2) { str =>
+      val preapred = str.trim()
+      if (preapred.length < 1) future(BadRequest("Should be 1 symbol at least")) else
+        idByName(preapred) flatMap (_.fold(future(BadRequest("Not found")))(f1))
+    }))(f1))
+
+  private def withNameOrIdSingleOpt(
+    idFieldName: String,
+    nameFieldName: String,
+    idByName: String => Future[Option[Long]])(
+    f: Option[Long] => Future[Result])(implicit request: Request[JsValue], ac: AppContext): Future[Result] =
+    withNameOrIdOpt(idFieldName, nameFieldName, idByName)(t => f(Some(t)))(f(None))
+
+  private def withAccountNameOrIdOpt(f1: Long => Future[Result])(f2: Future[Result])(implicit request: Request[JsValue], ac: AppContext): Future[Result] =
+    withNameOrIdOpt("account_id", "login", dao.findAccountIdByLoginOrEmail)(f1)(f2)
+
+  private def withAccountNameOrIdSingleOpt(f: Option[Long] => Future[Result])(implicit request: Request[JsValue], ac: AppContext): Future[Result] =
+    withNameOrIdSingleOpt("account_id", "login", dao.findAccountIdByLoginOrEmail)(f)
+
+  private def withAccountNameOrId(f: Long => Future[Result])(implicit request: Request[JsValue], ac: AppContext): Future[Result] =
+    withNameOrId("account_id", "login", dao.findAccountIdByLoginOrEmail, f)
 
 }
 

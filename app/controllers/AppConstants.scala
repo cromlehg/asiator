@@ -4,8 +4,6 @@ object AppConstants {
 
   val APP_NAME = "Gese"
 
-  val BACKEND_NAME = "Backend Core v0.1"
-
   val PWD_MIN_LENGTH = 10
 
   val DECIMALS = 100

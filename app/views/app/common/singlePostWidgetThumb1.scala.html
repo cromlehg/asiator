@@ -1,0 +1,14 @@
+@(post: models.Post)(implicit flash: Flash, messages: Messages, ac: controllers.AppContext)
+
+  <div class="col-12 col-md-6 col-lg-3">
+        
+          <div class="thumbnail">
+            <img src="@post.thumbnailOpt.getOrElse("#")" alt="@post.title" class="figure-img img-fluid rounded">
+            <div class="caption">
+                <h4>@post.title</h4>
+                <p>@post.description ...</p>
+            </div>
+          </div>
+        
+
+  </div>
