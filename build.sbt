@@ -17,7 +17,7 @@ libraryDependencies += "org.web3j" % "core" % "3.3.1"
 
 libraryDependencies += "com.github.t3hnar" %% "scala-bcrypt" % "3.1"
 
-libraryDependencies += "org.webjars" % "bootstrap" % "4.0.0-2"
+libraryDependencies += "org.webjars" % "bootstrap" % "4.1.0"
 
 libraryDependencies += "com.adrianhurt" %% "play-bootstrap" % "1.4-P26-B4-SNAPSHOT"
 

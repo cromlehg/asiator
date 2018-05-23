@@ -18,8 +18,8 @@
 
 </div>
 
-<div class="row">
-  <div class="col-12 col-md-6"></div>
+<div class="row" id="center-feed">
+  
   <div class="col-12 col-md-6">
     <div class="row">
       <div class="col-12 col-md-6"></div>
@@ -54,6 +54,16 @@
     }).fail(data => {
       alert(data.responseText);
     });   
+
+/*	jsRoutes.controllers.sside.PostsController.findPostsByCategory2().ajax({
+	  data: JSON.stringify({page_id: 1}),
+	  contentType: 'text/json'
+	}).done(data => {
+	  $('#center-feed').append(data);
+    }).fail(data => {
+      alert(data.responseText);
+    });*/ 
+    
   })
 </script>
 

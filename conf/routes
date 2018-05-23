@@ -43,6 +43,8 @@ GET    /app/register/approve/:login/:code            controllers.sside.AccountsC
 + nocsrf
 POST   /app/register/approve                         controllers.sside.AccountsController.processApproveRegister()
 
+
+
 + nocsrf
 POST   /app/posts/find                               controllers.sside.PostsController.findPostsByCategory()
 

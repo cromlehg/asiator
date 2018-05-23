@@ -165,6 +165,24 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
       }
     })
   }
+  
+//  def findPostsByCategory() = Action.async(parse.json) { implicit request =>
+//    fieldLong("page_id")(pageId => fieldStringOpt("filter") { filterName =>
+//      optionalAuthorized { optUser =>
+//        fieldSeqStringOptOpt("tags") { tagNamesOpt: Option[Seq[String]] =>
+//          val tagNamesOptPrepared = tagNamesOpt.map(_.map(_.trim.toLowerCase))
+//          if (tagNamesOptPrepared.isDefined && tagNamesOptPrepared.get.length > AppConstants.TAGS_PER_POST_LIMIT) future(BadRequest("You have more than " + AppConstants.TAGS_PER_POST_LIMIT + " tags"))
+//          else if (tagNamesOptPrepared.isDefined && tagNamesOptPrepared.get.exists(_.length < AppConstants.TAG_SIZE_LIMIT)) future(BadRequest("Each tag length should be more than " + (AppConstants.TAG_SIZE_LIMIT - 1))) else {
+//            val userIdOpt = optUser.map(_.id)
+//            withAccountNameOrIdSingleOpt(idOpt =>
+//              dao.findPostsWithAccountsByCategoryTagNames(userIdOpt, idOpt, filterName, pageId, tagNamesOptPrepared) map { posts =>
+//                Ok(views.html.app.common.postsListThumb2(posts))
+//              })
+//          }
+//        }
+//      }
+//    })
+//  }
 
   private def withNameOrId(
     idFieldName: String,
