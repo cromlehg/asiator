@@ -2,7 +2,7 @@ package controllers
 
 object AppConstants {
 
-  val APP_NAME = "Gese"
+  val APP_NAME = "Asiator"
 
   val PWD_MIN_LENGTH = 10
 
