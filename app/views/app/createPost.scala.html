@@ -13,7 +13,7 @@
 	  @b4.text( inForm("title"), '_label -> "Название" )
 	  <div class="form-group   " id="content_field">
         <label for="content">Содержание</label>
-        <textarea id="content" data-provide="markdown" name="content" minlength="500" rows="20" required="true" class="form-control">@inForm("content").value</textarea>
+        <textarea id="content" data-toggle="markdown" name="content" minlength="500" rows="20" required="true" class="form-control">@inForm("content").value</textarea>
       </div>	  
 	  @b4.submit('_class -> "mt-5", 'class -> "btn btn-outline-primary btn-block"){ Опубликовать }   
   	}
@@ -23,4 +23,5 @@
   <script src="@routes.Assets.versioned("javascripts/bootstrap-markdown-editor/markdown.js")" type="text/javascript"></script>
   <script src="@routes.Assets.versioned("javascripts/bootstrap-markdown-editor/to-markdown.js")" type="text/javascript"></script>
   <script src="@routes.Assets.versioned("javascripts/bootstrap-markdown-editor/bootstrap-markdown.js")" type="text/javascript"></script>
+  <script>$('[data-toggle="markdown"]').markdown({iconlibrary: 'fa'});</script>
 }
