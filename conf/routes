@@ -21,6 +21,8 @@ GET    /app/posts/create                             controllers.sside.PostsCont
 + nocsrf
 POST   /app/posts/create                             controllers.sside.PostsController.processCreatePost()
 
+GET    /app/posts/edit/:postId                       controllers.sside.PostsController.editPost(postId: Long)
+
 GET    /app/login                                    controllers.sside.AccountsController.login()
 
 + nocsrf

@@ -121,6 +121,18 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
     }
   }
 
+  def editPost(postId: Long) = Action.async { implicit request =>
+    onlyAuthorized { account =>
+      dao.findPostById(postId) map (
+        _.fold(BadRequest("Post not found")){ post =>
+          if (account.id == post.ownerId)
+            Ok(views.html.app.createPost(createPostForm))
+          else
+            BadRequest("You have no permissions to edit this post")
+        })
+    }
+  }
+
   def posts(pageId: Long) = Action.async { implicit request =>
     optionalAuthorized { accountOpt =>
       dao.findPostsWithAccountsByCategoryTagIds(None, None, pageId, None) map { posts =>
