@@ -125,10 +125,12 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
     onlyAuthorized { account =>
       dao.findPostById(postId) map (
         _.fold(BadRequest("Post not found")){ post =>
-          if (account.id == post.ownerId)
-            Ok(views.html.app.createPost(createPostForm))
-          else
+          if (account.id == post.ownerId) {
+            val postData = Map("title" -> post.title, "content" -> post.content)
+            Ok(views.html.app.createPost(createPostForm.bind(postData)))
+          } else {
             BadRequest("You have no permissions to edit this post")
+          }
         })
     }
   }
