@@ -121,6 +121,36 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
     }
   }
 
+  def processEditPost(postId: Long) = Action.async { implicit request =>
+    onlyAuthorized { account =>
+
+      def redirectWithError(msg: String, form: Form[_]) =
+        future(Ok(views.html.app.createPost(form)(Flash(form.data) + ("error" -> msg), implicitly, implicitly)))
+
+      dao.findPostById(postId) flatMap (
+        _.fold(Future(BadRequest("Post not found"))){ post =>
+          if (account.id != post.ownerId) {
+            Future(BadRequest("You have no permissions to edit this post"))
+          } else {
+            createPostForm.bindFromRequest.fold(
+              formWithErrors => Future(BadRequest(views.html.app.createPost(formWithErrors))), {
+                post =>
+                  dao.updatePost(
+                    postId,
+                    post.title,
+                    post.content) flatMap { result =>
+                      if (result)
+                        Future.successful(Redirect(controllers.sside.routes.PostsController.viewPost(postId))
+                          .flashing("success" -> ("Post successfully updated!")))
+                      else
+                        redirectWithError("Some problems during post update!", createPostForm.fill(post))
+                  }
+              })
+          }
+        })
+    }
+  }
+
   def editPost(postId: Long) = Action.async { implicit request =>
     onlyAuthorized { account =>
       dao.findPostById(postId) map (

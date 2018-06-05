@@ -698,6 +698,9 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
     }
   }
 
+  def updatePost(postId: Long, title: String, content: String): Future[Boolean] =
+    db.run(posts.filter(_.id === postId).map(post => (post.title, post.content)).update(title, content).transactionally.map(_ > 0))
+
   def createProductWithPostsCounterUpdate(
     userId: Long,
     name: String,
