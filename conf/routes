@@ -23,6 +23,9 @@ POST   /app/posts/create                             controllers.sside.PostsCont
 
 GET    /app/posts/edit/:postId                       controllers.sside.PostsController.editPost(postId: Long)
 
++ nocsrf
+POST   /app/posts/edit/:postId                       controllers.sside.PostsController.processEditPost(postId: Long)
+
 GET    /app/login                                    controllers.sside.AccountsController.login()
 
 + nocsrf

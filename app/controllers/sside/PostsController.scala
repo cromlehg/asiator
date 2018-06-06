@@ -91,7 +91,7 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
         future(Ok(views.html.app.createPost(form)(Flash(form.data) + ("error" -> msg), implicitly, implicitly)))
 
       createPostForm.bindFromRequest.fold(
-        formWithErrors => Future(BadRequest(views.html.app.createPost(formWithErrors))), {
+        formWithErrors => future(BadRequest(views.html.app.createPost(formWithErrors))), {
           post =>
             dao.createPostWithPostsCounterUpdate(
               account.id,
@@ -103,7 +103,7 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
               Seq.empty[String]) flatMap { createdPostOpt =>
                 createdPostOpt match {
                   case Some(createdPost) =>
-                    Future.successful(Redirect(controllers.sside.routes.PostsController.viewPost(createdPost.id))
+                    future(Redirect(controllers.sside.routes.PostsController.viewPost(createdPost.id))
                       .flashing("success" -> ("Post successfully created!")))
                   case _ =>
                     redirectWithError("Some problems during post creation!", createPostForm.fill(post))
@@ -117,7 +117,7 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
 
   def createPost() = Action.async { implicit request =>
     onlyAuthorized { account =>
-      Future(Ok(views.html.app.createPost(createPostForm)))
+      future(Ok(views.html.app.createPost(createPostForm)))
     }
   }
 
@@ -125,12 +125,12 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
     onlyAuthorized { account =>
 
       def redirectWithError(msg: String, form: Form[_]) =
-        future(Ok(views.html.app.createPost(form)(Flash(form.data) + ("error" -> msg), implicitly, implicitly)))
+        future(Ok(views.html.app.editPost(form, postId)(Flash(form.data) + ("error" -> msg), implicitly, implicitly)))
 
       dao.findPostById(postId) flatMap (
-        _.fold(Future(BadRequest("Post not found"))){ post =>
+        _.fold(future(BadRequest("Post not found"))){ post =>
           if (account.id != post.ownerId) {
-            Future(BadRequest("You have no permissions to edit this post"))
+            future(BadRequest("You have no permissions to edit this post"))
           } else {
             createPostForm.bindFromRequest.fold(
               formWithErrors => Future(BadRequest(views.html.app.createPost(formWithErrors))), {
@@ -140,7 +140,7 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
                     post.title,
                     post.content) flatMap { result =>
                       if (result)
-                        Future.successful(Redirect(controllers.sside.routes.PostsController.viewPost(postId))
+                        future(Redirect(controllers.sside.routes.PostsController.viewPost(postId))
                           .flashing("success" -> ("Post successfully updated!")))
                       else
                         redirectWithError("Some problems during post update!", createPostForm.fill(post))
