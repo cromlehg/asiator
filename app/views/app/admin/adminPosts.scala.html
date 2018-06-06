@@ -1,0 +1,24 @@
+@(account: models.Account, posts: Seq[models.Post], pageId: Int, pagesCount: Int)(implicit flash: Flash, messages: Messages, ac: controllers.AppContext, req: play.api.mvc.RequestHeader)
+
+@app.admin.adminMain("posts") { } {
+  @base.common.components.container() {
+
+    @app.admin.paginationControlForPosts(pageId, pagesCount)
+ 
+    <div class="row">
+    @base.common.components.table(Seq("id", "title", "created", "actions"), posts.map( post => Seq(
+    	post.id, 
+    	Html("<a href=\"" + sside.routes.PostsController.viewPost(post.id) + "\" target=\"blank\">" + post.getTrimedTitle(50) + "</a>"),
+    	post.createdPrettyTime,
+    	Html("<a href=\"" + sside.routes.PostsController.editPost(post.id) + "\"><i class=\"fa fa-edit\" style=\"color: #788187;\"></i></a>")  	    	    	
+    	)))
+    </div>
+    
+    @app.admin.paginationControlForPosts(pageId, pagesCount)
+     
+  }
+} { 
+
+}
+
+

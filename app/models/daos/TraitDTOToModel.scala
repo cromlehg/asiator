@@ -101,13 +101,13 @@ trait TraitDTOToModel {
       dto.commentsCounterStarted,
       dto.postsCount,
       dto.about,
-      dto.accountType)
+      dto.accountType,
+      Seq.empty[Int],
+      None,
+      None)
 
-  def accountFrom(dto: DBAccount, roles: Int*): models.Account = {
-    val user = accountFrom(dto)
-    user.roles = roles
-    user
-  }
+  def accountFrom(dto: DBAccount, inroles: Int*): models.Account = 
+    accountFrom(dto).copy(roles = inroles)
 
   def postFrom(dto: DBPost) =
     new models.Post(
@@ -145,6 +145,14 @@ trait TraitDTOToModel {
       dto.currencyId,
       dto.updated,
       dto.balanceType,
+      dto.value)
+
+  def shortOptionFrom(dto: DBShortOption) =
+    new models.ShortOption(
+      dto.id,
+      dto.name,
+      dto.descr,
+      dto.ttype,
       dto.value)
 
 }

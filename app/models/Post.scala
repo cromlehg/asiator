@@ -87,6 +87,8 @@ class Post(
   val createdShortDate = formattedShortDate(created)
 
   lazy val createdPrettyTime = ContentCompilerHelper.prettyTime.format(new Date(created))
+  
+  def getTrimedTitle(size: Int) = if (title.size > size) title.substring(0, size) + "..." else title
 
   def toJson()(implicit ac: AppContext): JsObject = {
     var jsObj = Json.obj(

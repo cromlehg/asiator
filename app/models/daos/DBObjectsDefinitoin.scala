@@ -188,4 +188,10 @@ case class DBMarketingCampaign(
   val descr: Option[String],
   val title: String)
 
+case class DBShortOption(
+  val id: Long,
+  val name: String,
+  val descr: String,
+  val ttype: String,
+  val value: String)
 

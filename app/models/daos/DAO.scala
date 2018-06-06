@@ -25,7 +25,6 @@ import models.ContentType
 import models.BalanceType
 import models.AccountType
 import sun.net.ftp.FtpClient.TransferType
-import models.AccountLevel
 
 /**
  *
@@ -59,6 +58,30 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
     }
   }
 
+  def getShortOptions(): Future[Seq[models.ShortOption]] =
+    db.run(shortOptions.result) map (_ map shortOptionFrom)
+
+  def getShortOptionByName(name: String): Future[Option[models.ShortOption]] =
+    db.run(shortOptions.filter(_.name === name).result.headOption) map (_ map shortOptionFrom)
+
+  def updateShortOptionByName(name: String, value: String): Future[Option[models.ShortOption]] =
+    db.run(shortOptions.filter(_.name === name).map(_.value).update(value).map(_ > 1)
+      .flatMap(_ => shortOptions.filter(_.name === name).result.headOption)) map (_ map shortOptionFrom)
+
+  def findAccountBySessionKeyAndIPWithBalancesAndRoles(sessionKey: String, ip: String): Future[Option[models.Account]] = {
+    val query = for {
+      dbSession <- sessions.filter(t => t.sessionKey === sessionKey && t.ip === ip)
+      dbAccount <- accounts.filter(_.id === dbSession.userId)
+    } yield (dbAccount, dbSession)
+    val result = db.run(query.result.headOption).map(_.map {
+      case (dbAccount, dbSession) => accountFrom(dbAccount).copy(sessionOpt = Some(sessionFrom(dbSession)))
+    }).flatMap(_ match {
+      case Some(account) => fillAccountBalances(account)
+      case _ => Future.successful(None)
+    })
+    updateAccountWithRoles(result)
+  }
+
   def getNotificationTasksWithEmailAndProduct(pageId: Long): Future[Seq[models.ScheduledTask]] = {
     val now = System.currentTimeMillis()
     db.run(scheduledTasks
@@ -87,6 +110,14 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       .size.result) map pages
   }
 
+  def getPostsPage(pageId: Int): Future[Seq[models.Post]] =
+    db.run(posts.sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize).result) map (_ map postFrom)
+
+  def getPostsPages(): Future[Int] =
+    db.run(posts.length.result).map { r =>
+      pages(r, pageSize.toInt)
+    }
+
   def getTagsPage(pageId: Long): Future[Seq[models.Tag]] =
     db.run(tags.sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize).result) map (_ map tagFrom)
 
@@ -113,9 +144,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       } yield (dbaccount, balanceTokens)
     } map {
       case (dbaccount, balanceTokens) =>
-        val account = accountFrom(dbaccount)
-        account.balanceTokenOpt = balanceTokens
-        Some(account)
+        Some(accountFrom(dbaccount).copy(balanceTokenOpt = balanceTokens))
     }
   }
 
@@ -139,9 +168,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       } yield (dbaccount, balanceTokens)
     } map {
       case (dbaccount, balanceTokens) =>
-        val account = accountFrom(dbaccount)
-        account.balanceTokenOpt = balanceTokens
-        Some(account)
+        Some(accountFrom(dbaccount).copy(balanceTokenOpt = balanceTokens))
     }
   }
 
@@ -153,9 +180,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       } yield (dbaccount, balanceTokens)
     } map {
       case (dbaccount, balanceTokens) =>
-        val account = accountFrom(dbaccount)
-        account.balanceTokenOpt = balanceTokens
-        Some(account)
+        Some(accountFrom(dbaccount).copy(balanceTokenOpt = balanceTokens))
     }
   }
 
@@ -260,11 +285,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       for {
         balanceTokens <- filterCurrentAccountBalanceValue(account.id, CurrencyType.TOKEN).result.headOption
       } yield (balanceTokens)
-    } map {
-      case (balanceTokens) =>
-        account.balanceTokenOpt = balanceTokens
-        Some(account)
-    }
+    } map { case (balanceTokens) => Some(account.copy(balanceTokenOpt = balanceTokens)) }
   }
 
   def findAccountBySessionKeyAndIPWithBalances(sessionKey: String, ip: String): Future[Option[models.Account]] = {
@@ -273,10 +294,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       dbAccount <- accounts.filter(_.id === dbSession.userId)
     } yield (dbAccount, dbSession)
     db.run(query.result.headOption).map(_.map {
-      case (dbAccount, dbSession) =>
-        val user = accountFrom(dbAccount)
-        user.sessionOpt = Some(sessionFrom(dbSession))
-        user
+      case (dbAccount, dbSession) => accountFrom(dbAccount).copy(sessionOpt = Some(sessionFrom(dbSession)))
     }).flatMap(_ match {
       case Some(account) => fillAccountBalances(account)
       case _ => Future.successful(None)
@@ -510,10 +528,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       dbAccount <- accounts.filter(_.id === dbSession.userId)
     } yield (dbAccount, dbSession)
     db.run(query.result.headOption).map(_.map {
-      case (dbAccount, dbSession) =>
-        val user = accountFrom(dbAccount)
-        user.sessionOpt = Some(sessionFrom(dbSession))
-        user
+      case (dbAccount, dbSession) => accountFrom(dbAccount).copy(sessionOpt = Some(sessionFrom(dbSession)))
     })
   }
 
@@ -759,33 +774,33 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       case None => (tags returning tags.map(_.id) into ((v, id) => v.copy(id = id))) += DBTag(0, name)
     }
 
-//  def currencySelectorCommentRewardDAO(currency: Int, t: DAO.this.Comments) =
-//    currency match {
-//      case CurrencyType.TOKEN => t.rewardToken
-//      case CurrencyType.POWER => t.rewardPower
-//      case CurrencyType.DOLLAR => t.rewardDollar
-//    }
-//
-//  def currencySelectorCommentRewardDB(currency: Int, t: DBComment) =
-//    currency match {
-//      case CurrencyType.TOKEN => t.rewardToken
-//      case CurrencyType.POWER => t.rewardPower
-//      case CurrencyType.DOLLAR => t.rewardDollar
-//    }
-//
-//  def currencySelectorPostRewardDAO(currency: Int, t: DAO.this.Posts) =
-//    currency match {
-//      case CurrencyType.TOKEN => t.rewardToken
-//      case CurrencyType.POWER => t.rewardPower
-//      case CurrencyType.DOLLAR => t.rewardDollar
-//    }
-//
-//  def currencySelectorPostRewardDB(currency: Int, t: DBPost) =
-//    currency match {
-//      case CurrencyType.TOKEN => t.rewardToken
-//      case CurrencyType.POWER => t.rewardPower
-//      case CurrencyType.DOLLAR => t.rewardDollar
-//    }
+  //  def currencySelectorCommentRewardDAO(currency: Int, t: DAO.this.Comments) =
+  //    currency match {
+  //      case CurrencyType.TOKEN => t.rewardToken
+  //      case CurrencyType.POWER => t.rewardPower
+  //      case CurrencyType.DOLLAR => t.rewardDollar
+  //    }
+  //
+  //  def currencySelectorCommentRewardDB(currency: Int, t: DBComment) =
+  //    currency match {
+  //      case CurrencyType.TOKEN => t.rewardToken
+  //      case CurrencyType.POWER => t.rewardPower
+  //      case CurrencyType.DOLLAR => t.rewardDollar
+  //    }
+  //
+  //  def currencySelectorPostRewardDAO(currency: Int, t: DAO.this.Posts) =
+  //    currency match {
+  //      case CurrencyType.TOKEN => t.rewardToken
+  //      case CurrencyType.POWER => t.rewardPower
+  //      case CurrencyType.DOLLAR => t.rewardDollar
+  //    }
+  //
+  //  def currencySelectorPostRewardDB(currency: Int, t: DBPost) =
+  //    currency match {
+  //      case CurrencyType.TOKEN => t.rewardToken
+  //      case CurrencyType.POWER => t.rewardPower
+  //      case CurrencyType.DOLLAR => t.rewardDollar
+  //    }
 
   def udateCommentReward(optTx: Option[DBTransaction], comment: DBComment, reward: Long): DBIOAction[Int, NoStream, Effect.Write] =
     optTx match {
@@ -824,14 +839,8 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
 
   def updateAccountWithRoles(futureOptAccount: Future[Option[Account]]): Future[Option[Account]] =
     futureOptAccount flatMap {
-      case Some(u) =>
-        findRolesByAccountId(u.id).map { r =>
-          Some {
-            u.roles = r
-            u
-          }
-        }
-      case None => Future(None)
+      case Some(u) => findRolesByAccountId(u.id).map { r => Some(u.copy(roles = r)) }
+      case None => Future.successful(None)
     }
 
   def findRolesByAccountId(userId: Long) =
@@ -1143,46 +1152,46 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       account <- accounts.filter(_.id === userId).result.head
       _ <- accounts.filter(_.id === userId).map(_.likesCounter).update(account.commentsCounter + 1)
       userTokenBalance <- findCurrentAccountBalance(account.id, CurrencyType.TOKEN).map(_.value)
-//      // rewards to liker - 0.5*DP
-//      _ <- addRewardOpt(
-//        TxType.LIKER_REWARD,
-//        userId,
-//        RewardLogic.likerRewardByLikePower(userPrevPowerBalance),
-//        CurrencyType.POWER,
-//        Some("Account reward for like creation"),
-//        TargetType.SYSTEM,
-//        None,
-//        Some(TargetType.POST),
-//        Some(postId))
-//      // rewards to comment owner 0.75*DP of actor
-//      comment <- comments.filter(_.id === commentId).result.head
-//      _ <- comments.filter(_.id === commentId).map(_.likesCount).update(comment.likesCount + 1)
-//      commentOwner <- accounts.filter(_.id === comment.ownerId).result.head
-//      _ <- {
-//        val reward = RewardLogic.postRewardByLikePower(userPrevPowerBalance, models.RewardType.POWER)
-//        addRewardOpt(
-//          TxType.LIKE_REWARD,
-//          commentOwner.id,
-//          reward,
-//          CurrencyType.POWER,
-//          Some("Comment owner POWER reward by another user like"),
-//          TargetType.SYSTEM,
-//          None,
-//          Some(TargetType.COMMENT),
-//          Some(commentId)) flatMap (t => udateCommentReward(t, comment, reward))
-//      }
-//      _ <- addRewardOpt(
-//        TxType.LIKER_REWARD,
-//        commentOwner.id,
-//        RewardLogic.likerRewardByLikePower(userPrevPowerBalance),
-//        CurrencyType.POWER,
-//        Some("Liker POWER reward"),
-//        TargetType.SYSTEM,
-//        None,
-//        Some(TargetType.COMMENT),
-//        Some(commentId))
+      //      // rewards to liker - 0.5*DP
+      //      _ <- addRewardOpt(
+      //        TxType.LIKER_REWARD,
+      //        userId,
+      //        RewardLogic.likerRewardByLikePower(userPrevPowerBalance),
+      //        CurrencyType.POWER,
+      //        Some("Account reward for like creation"),
+      //        TargetType.SYSTEM,
+      //        None,
+      //        Some(TargetType.POST),
+      //        Some(postId))
+      //      // rewards to comment owner 0.75*DP of actor
+      //      comment <- comments.filter(_.id === commentId).result.head
+      //      _ <- comments.filter(_.id === commentId).map(_.likesCount).update(comment.likesCount + 1)
+      //      commentOwner <- accounts.filter(_.id === comment.ownerId).result.head
+      //      _ <- {
+      //        val reward = RewardLogic.postRewardByLikePower(userPrevPowerBalance, models.RewardType.POWER)
+      //        addRewardOpt(
+      //          TxType.LIKE_REWARD,
+      //          commentOwner.id,
+      //          reward,
+      //          CurrencyType.POWER,
+      //          Some("Comment owner POWER reward by another user like"),
+      //          TargetType.SYSTEM,
+      //          None,
+      //          Some(TargetType.COMMENT),
+      //          Some(commentId)) flatMap (t => udateCommentReward(t, comment, reward))
+      //      }
+      //      _ <- addRewardOpt(
+      //        TxType.LIKER_REWARD,
+      //        commentOwner.id,
+      //        RewardLogic.likerRewardByLikePower(userPrevPowerBalance),
+      //        CurrencyType.POWER,
+      //        Some("Liker POWER reward"),
+      //        TargetType.SYSTEM,
+      //        None,
+      //        Some(TargetType.COMMENT),
+      //        Some(commentId))
       userActual <- accounts.filter(_.id === userId).result.head
-//      (rewardPower, rewardDollar, rewardToken) <- comments.filter(_.id === commentId).map(t => (t.rewardPower, t.rewardDollar, t.rewardToken)).result.head
+      //      (rewardPower, rewardDollar, rewardToken) <- comments.filter(_.id === commentId).map(t => (t.rewardPower, t.rewardDollar, t.rewardToken)).result.head
       rewardToken <- comments.filter(_.id === commentId).map(_.reward).result.head
     } yield (like, rewardToken, userActual)
 
@@ -1217,53 +1226,53 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       userTokensBalance <- findCurrentAccountBalance(userId, CurrencyType.TOKEN).map(_.value)
       rewardToken <- posts.filter(_.id === postId).map(_.reward).result.head
       // rewards to liker - 0.5*DP
-//      _ <- {
-//        val reward = RewardLogic.likerRewardByLikePower(userTokensBalance)
-//        if (reward > 0) {
-//          addValueToAccountBalanceDBIOAction(
-//            TxType.LIKER_REWARD,
-//            userId,
-//            reward,
-//            CurrencyType.POWER,
-//            Some("Account POWER reward for like creation"),
-//            TargetType.SYSTEM,
-//            None,
-//            Some(TargetType.POST),
-//            Some(postId),
-//            None,
-//            None)
-//        } else DBIO.successful(None)
-//      }
-//      // rewards to post owner 0.75*DP of actor
-//      post <- posts.filter(_.id === postId).result.head
-//      _ <- posts.filter(_.id === postId).map(_.likesCount).update(post.likesCount + 1)
-//      postOwner <- accounts.filter(_.id === post.ownerId).result.head
-//      _ <- {
-//        val reward = RewardLogic.postRewardByLikePower(userPrevPowerBalance, post.rewardType)
-//        addRewardOpt(
-//          TxType.LIKE_REWARD,
-//          postOwner.id,
-//          reward,
-//          CurrencyType.POWER,
-//          Some("Post owner POWER reward by another user like"),
-//          TargetType.SYSTEM,
-//          None,
-//          Some(TargetType.POST),
-//          Some(postId)) flatMap (t => udatePostReward(t, post, reward, CurrencyType.POWER))
-//      }
-//      _ <- {
-//        val reward = RewardLogic.postRewardByLikeDollars(userPrevPowerBalance, post.rewardType)
-//        addRewardOpt(
-//          TxType.LIKE_REWARD,
-//          postOwner.id,
-//          reward,
-//          CurrencyType.DOLLAR,
-//          Some("Post owner DOLLAR reward by another user like"),
-//          TargetType.SYSTEM,
-//          None,
-//          Some(TargetType.POST),
-//          Some(postId)) flatMap (t => udatePostReward(t, post, reward, CurrencyType.DOLLAR))
-//      }      
+      //      _ <- {
+      //        val reward = RewardLogic.likerRewardByLikePower(userTokensBalance)
+      //        if (reward > 0) {
+      //          addValueToAccountBalanceDBIOAction(
+      //            TxType.LIKER_REWARD,
+      //            userId,
+      //            reward,
+      //            CurrencyType.POWER,
+      //            Some("Account POWER reward for like creation"),
+      //            TargetType.SYSTEM,
+      //            None,
+      //            Some(TargetType.POST),
+      //            Some(postId),
+      //            None,
+      //            None)
+      //        } else DBIO.successful(None)
+      //      }
+      //      // rewards to post owner 0.75*DP of actor
+      //      post <- posts.filter(_.id === postId).result.head
+      //      _ <- posts.filter(_.id === postId).map(_.likesCount).update(post.likesCount + 1)
+      //      postOwner <- accounts.filter(_.id === post.ownerId).result.head
+      //      _ <- {
+      //        val reward = RewardLogic.postRewardByLikePower(userPrevPowerBalance, post.rewardType)
+      //        addRewardOpt(
+      //          TxType.LIKE_REWARD,
+      //          postOwner.id,
+      //          reward,
+      //          CurrencyType.POWER,
+      //          Some("Post owner POWER reward by another user like"),
+      //          TargetType.SYSTEM,
+      //          None,
+      //          Some(TargetType.POST),
+      //          Some(postId)) flatMap (t => udatePostReward(t, post, reward, CurrencyType.POWER))
+      //      }
+      //      _ <- {
+      //        val reward = RewardLogic.postRewardByLikeDollars(userPrevPowerBalance, post.rewardType)
+      //        addRewardOpt(
+      //          TxType.LIKE_REWARD,
+      //          postOwner.id,
+      //          reward,
+      //          CurrencyType.DOLLAR,
+      //          Some("Post owner DOLLAR reward by another user like"),
+      //          TargetType.SYSTEM,
+      //          None,
+      //          Some(TargetType.POST),
+      //          Some(postId)) flatMap (t => udatePostReward(t, post, reward, CurrencyType.DOLLAR))
+      //      }
     } yield (like, rewardToken, user)
 
     db.run(query.transactionally) map {
@@ -1411,9 +1420,9 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
         AccountStatus.NORMAL,
         companyNameOpt, None, None, 0, System.currentTimeMillis,
         Some(BCrypt.hashpw(Random.nextString(5) + login + System.currentTimeMillis.toString, BCrypt.gensalt())
-            .replaceAll("\\.", "s")
-            .replaceAll("\\\\", "d")
-            .replaceAll("\\$", "g").toList.map(_.toInt.toHexString).mkString.substring(0,99)),
+          .replaceAll("\\.", "s")
+          .replaceAll("\\\\", "d")
+          .replaceAll("\\$", "g").toList.map(_.toInt.toHexString).mkString.substring(0, 99)),
         0, 0, 0, 0, 0, 0, 0,
         None,
         accountType)

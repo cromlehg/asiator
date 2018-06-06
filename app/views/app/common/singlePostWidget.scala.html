@@ -18,7 +18,9 @@
             <i class="fa fa-thumbs-up" style="color: #788187;"></i><span style="margin-left: 10px;">$@post.reward</span>
             <i class="fa fa-comments" style="color: #788187; margin-left: 20px;"></i><span style="margin-left: 10px;">@post.commentsCount</span>
             <span style="margin-left: 20px;">@post.likesCount votes</span>
-            <a href="@sside.routes.PostsController.editPost(post.id)"><i class="fa fa-edit" style="color: #788187; margin-left: 20px;"></i><span style="margin-left: 10px;">edit</span></a>
+            if(ac.authorizedOpt.isDefined && (ac.authorizedOpt.get.id == post.ownerId || ac.authorizedOpt.get.isAdmin)) { 
+              <a href="@sside.routes.PostsController.editPost(post.id)"><i class="fa fa-edit" style="color: #788187; margin-left: 20px;"></i><span style="margin-left: 10px;">edit</span></a>
+            }
         </div>
       </div>
     </div>

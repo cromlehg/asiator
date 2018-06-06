@@ -3,6 +3,10 @@ package controllers
 object AppConstants {
 
   val APP_NAME = "Asiator"
+  
+  val VERSION = "0.1a"
+  
+  val BACKEND_NAME = APP_NAME + " " + VERSION
 
   val PWD_MIN_LENGTH = 10
 

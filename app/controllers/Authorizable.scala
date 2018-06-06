@@ -17,6 +17,7 @@ import play.api.mvc.Result
 import play.api.mvc.Action
 import models.AccountStatus
 import models.ConfirmationStatus
+import models.Roles
 
 class Authorizable @Inject() (cc: ControllerComponents, dao: DAO, config: Config)(implicit ec: ExecutionContext)
   extends AbstractController(cc)
@@ -26,12 +27,21 @@ class Authorizable @Inject() (cc: ControllerComponents, dao: DAO, config: Config
 
   val SESSION_KEY = "session_key"
 
+  protected def onlyAdmin[T](notAuthorizedF: Future[Result])(f: models.Account => Future[Result])(implicit request: Request[T], ac: AppContext): Future[Result] =
+    onlyAuthorized(notAuthorizedF)(a => if (a.isAdmin) f(a) else notAuthorizedF)
+
   protected def notAuthorized[T](f: Future[Result])(implicit request: Request[T], ac: AppContext): Future[Result] =
     request.session.get(SESSION_KEY).fold(f)(curSessionKey =>
       future(BadRequest("You should logout before")))
 
   protected def sessionNotExpired(account: models.Account)(f: models.Account => Future[Result])(implicit ac: AppContext): Future[Result] =
     account.sessionOpt.fold(Future.successful(BadRequest("Empty user session"))) { session =>
+      ac.authorizedOpt = Some(account)
+      f(account)
+    }
+
+  protected def sessionNotExpired2(account: models.Account)(notAuthorized: Future[Result])(f: models.Account => Future[Result])(implicit ac: AppContext): Future[Result] =
+    account.sessionOpt.fold(notAuthorized) { session =>
       ac.authorizedOpt = Some(account)
       f(account)
     }
@@ -52,9 +62,15 @@ class Authorizable @Inject() (cc: ControllerComponents, dao: DAO, config: Config
           f(Some(user))
         })))
 
+  protected def onlyAuthorized[T](notAuthorized: Future[Result])(f: models.Account => Future[Result])(implicit request: Request[T], ac: AppContext): Future[Result] =
+    request.session.get(SESSION_KEY).fold(notAuthorized)(curSessionKey =>
+      dao.findAccountBySessionKeyAndIPWithBalancesAndRoles(curSessionKey, request.remoteAddress)
+        flatMap (_.fold(notAuthorized)(user =>
+          sessionNotExpired2(user)(notAuthorized)(f))))
+
   protected def onlyAuthorized[T](f: models.Account => Future[Result])(implicit request: Request[T], ac: AppContext): Future[Result] =
     request.session.get(SESSION_KEY).fold(future(BadRequest("Session not found. You shoud authorize before")))(curSessionKey =>
-      dao.findAccountBySessionKeyAndIPWithBalances(curSessionKey, request.remoteAddress)
+      dao.findAccountBySessionKeyAndIPWithBalancesAndRoles(curSessionKey, request.remoteAddress)
         flatMap (_.fold(future(BadRequest("Can't find session. You should authorize before")))(user =>
           sessionNotExpired(user)(f))))
 

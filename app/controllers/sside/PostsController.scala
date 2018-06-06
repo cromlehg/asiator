@@ -68,6 +68,7 @@ import play.twirl.api.Html
 import play.api.mvc.Action
 import controllers.AppConstants
 import controllers.JSONSupport
+import models.ShortOptions
 
 @Singleton
 class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Config)(implicit ec: ExecutionContext)
@@ -79,10 +80,18 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
 
   case class PostPostData(val title: String, val content: String)
 
-  val createPostForm = Form(
+  val articleForm = Form(
     mapping(
       "title" -> nonEmptyText(3, 100),
       "content" -> nonEmptyText(500))(PostPostData.apply)(PostPostData.unapply))
+
+  def booleanOptionFold(name: String)(ifFalse: Future[Result])(ifTrue: Future[Result]): Future[Result] =
+    dao.getShortOptionByName(name) flatMap {
+      _.fold(future(BadRequest("Not found option " + name)))(option => if (option.toBoolean) ifTrue else ifFalse)
+    }
+
+  def booleanOptionTrue(name: String)(ifTrue: Future[Result]): Future[Result] =
+    booleanOptionFold(name)(future(BadRequest("Not available now")))(ifTrue)
 
   def processCreatePost() = Action.async { implicit request =>
     onlyAuthorized { account =>
@@ -90,25 +99,29 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
       def redirectWithError(msg: String, form: Form[_]) =
         future(Ok(views.html.app.createPost(form)(Flash(form.data) + ("error" -> msg), implicitly, implicitly)))
 
-      createPostForm.bindFromRequest.fold(
+      articleForm.bindFromRequest.fold(
         formWithErrors => future(BadRequest(views.html.app.createPost(formWithErrors))), {
           post =>
-            dao.createPostWithPostsCounterUpdate(
-              account.id,
-              None,
-              post.title,
-              post.content,
-              None,
-              TargetType.ARTICLE,
-              Seq.empty[String]) flatMap { createdPostOpt =>
-                createdPostOpt match {
-                  case Some(createdPost) =>
-                    future(Redirect(controllers.sside.routes.PostsController.viewPost(createdPost.id))
-                      .flashing("success" -> ("Post successfully created!")))
-                  case _ =>
-                    redirectWithError("Some problems during post creation!", createPostForm.fill(post))
+            booleanOptionFold(ShortOptions.ARTICLES_POST_ALLOWED) {
+              redirectWithError("Not allowed for now!", articleForm.fill(post))
+            } {
+              dao.createPostWithPostsCounterUpdate(
+                account.id,
+                None,
+                post.title,
+                post.content,
+                None,
+                TargetType.ARTICLE,
+                Seq.empty[String]) flatMap { createdPostOpt =>
+                  createdPostOpt match {
+                    case Some(createdPost) =>
+                      future(Redirect(controllers.sside.routes.PostsController.viewPost(createdPost.id))
+                        .flashing("success" -> ("Post successfully created!")))
+                    case _ =>
+                      redirectWithError("Some problems during post creation!", articleForm.fill(post))
+                  }
                 }
-              }
+            }
 
         })
 
@@ -117,7 +130,7 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
 
   def createPost() = Action.async { implicit request =>
     onlyAuthorized { account =>
-      future(Ok(views.html.app.createPost(createPostForm)))
+      future(Ok(views.html.app.createPost(articleForm)))
     }
   }
 
@@ -128,22 +141,26 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
         future(Ok(views.html.app.editPost(form, postId)(Flash(form.data) + ("error" -> msg), implicitly, implicitly)))
 
       dao.findPostById(postId) flatMap (
-        _.fold(future(BadRequest("Post not found"))){ post =>
-          if (account.id != post.ownerId) {
+        _.fold(future(BadRequest("Post not found"))) { post =>
+          if (account.id != post.ownerId && account.notAdmin) {
             future(BadRequest("You have no permissions to edit this post"))
           } else {
-            createPostForm.bindFromRequest.fold(
+            articleForm.bindFromRequest.fold(
               formWithErrors => Future(BadRequest(views.html.app.createPost(formWithErrors))), {
                 post =>
-                  dao.updatePost(
-                    postId,
-                    post.title,
-                    post.content) flatMap { result =>
-                      if (result)
-                        future(Redirect(controllers.sside.routes.PostsController.viewPost(postId))
-                          .flashing("success" -> ("Post successfully updated!")))
-                      else
-                        redirectWithError("Some problems during post update!", createPostForm.fill(post))
+                  booleanOptionFold(ShortOptions.ARTICLES_CHANGE_ALLOWED) {
+                    redirectWithError("Not allowed for now!", articleForm.fill(post))
+                  } {
+                    dao.updatePost(
+                      postId,
+                      post.title,
+                      post.content) flatMap { result =>
+                        if (result)
+                          future(Redirect(controllers.sside.routes.PostsController.viewPost(postId))
+                            .flashing("success" -> ("Post successfully updated!")))
+                        else
+                          redirectWithError("Some problems during post update!", articleForm.fill(post))
+                      }
                   }
               })
           }
@@ -154,10 +171,10 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
   def editPost(postId: Long) = Action.async { implicit request =>
     onlyAuthorized { account =>
       dao.findPostById(postId) map (
-        _.fold(BadRequest("Post not found")){ post =>
+        _.fold(BadRequest("Post not found")) { post =>
           if (account.id == post.ownerId) {
             val postData = Map("title" -> post.title, "content" -> post.content)
-            Ok(views.html.app.createPost(createPostForm.bind(postData)))
+            Ok(views.html.app.createPost(articleForm.bind(postData)))
           } else {
             BadRequest("You have no permissions to edit this post")
           }
@@ -185,9 +202,7 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
     optionalAuthorized { accountOpt =>
       dao.findPostWithAccountByPostId(postId) flatMap (
         _.fold(future(NotFound(""))) { post =>
-          //dao.findReviewsWithAccountsByCategoryTagIds(post.id, 1) map { reviews =>
           future(Ok(views.html.app.viewPost(post, Seq())))
-          //}
         })
     }
   }
@@ -203,7 +218,7 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
               val userIdOpt = optUser.map(_.id)
               withAccountNameOrIdSingleOpt(idOpt =>
                 dao.findPostsWithAccountsByCategoryTagNames(userIdOpt, idOpt, filterName, pageId, tagNamesOptPrepared) map { posts =>
-                  if (patternId == 3) 
+                  if (patternId == 3)
                     Ok(views.html.app.common.postsList(posts))
                   else if (patternId == 2)
                     Ok(views.html.app.common.postsListThumb2(posts))

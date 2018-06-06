@@ -11,42 +11,35 @@ import controllers.AppConstants
 import controllers.AppContext
 import java.util.Date
 
-class Account(
-  val id:                     Long,
-  val login:                  String,
-  val email:                  String,
-  val hash:                   Option[String],
-  val avatar:                 Option[String],
-  val background:             Option[String],
-  val confirmationStatus:     Int,
-  val accountStatus:          Int,
-  val name:                   Option[String],
-  val surname:                Option[String],
-  val platformEth:            Option[String],
-  val timezoneId:             Int,
-  val registered:             Long,
-  val confirmCode:            Option[String],
-  val postsCounter:           Int,
-  val postsCounterStarted:    Long,
-  val likesCounter:           Int,
-  val likesCounterStarted:    Long,
-  val commentsCounter:        Int,
+case class Account(
+  val id: Long,
+  val login: String,
+  val email: String,
+  val hash: Option[String],
+  val avatar: Option[String],
+  val background: Option[String],
+  val confirmationStatus: Int,
+  val accountStatus: Int,
+  val name: Option[String],
+  val surname: Option[String],
+  val platformEth: Option[String],
+  val timezoneId: Int,
+  val registered: Long,
+  val confirmCode: Option[String],
+  val postsCounter: Int,
+  val postsCounterStarted: Long,
+  val likesCounter: Int,
+  val likesCounterStarted: Long,
+  val commentsCounter: Int,
   val commentsCounterStarted: Long,
-  val postsCount:             Long,
-  val about:                  Option[String],
-  val accountType:            Int) {
+  val postsCount: Long,
+  val about: Option[String],
+  val accountType: Int,
+  val roles: Seq[Int],
+  val balanceTokenOpt: Option[Long],
+  val sessionOpt: Option[Session]) {
 
-  var balanceTokenOpt: Option[Long] = None
-
-  var balanceDollarOpt: Option[Long] = None
-
-  var balancePowerOpt: Option[Long] = None
-
-  var balances: Map[String, Balance] = Map()
-
-  var sessionOpt: Option[Session] = None
-
-  var roles: Seq[Int] = Seq()
+  val balances: Map[String, Balance] = Map()
 
   val ldt = new LocalDateTime(registered, DateTimeZone.UTC)
 
@@ -56,11 +49,15 @@ class Account(
 
   val postsLimt = AppConstants.POSTS_COUNTER_LIMIT - postsCounter
 
+  val isAdmin = roles.contains(Roles.ADMIN)
+
+  val notAdmin = !isAdmin
+
   lazy val createdPrettyTime = ContentCompilerHelper.prettyTime.format(new Date(registered))
 
   override def equals(obj: Any) = obj match {
     case user: Account => user.email == email
-    case _             => false
+    case _ => false
   }
 
   override def toString = email
@@ -84,7 +81,7 @@ class Account(
 
   lazy val displayName = accountType match {
     case AccountType.COMPANY => name.getOrElse("")
-    case _                   => login
+    case _ => login
   }
 
   def toJson(implicit ac: AppContext): JsObject = {
@@ -102,8 +99,6 @@ class Account(
       "display_name" -> displayName)
 
     jsObj = balanceTokenOpt.fold(jsObj) { t => jsObj ++ Json.obj("balance_token" -> t) }
-    jsObj = balanceDollarOpt.fold(jsObj) { t => jsObj ++ Json.obj("balance_dollar" -> t) }
-    jsObj = balancePowerOpt.fold(jsObj) { t => jsObj ++ Json.obj("balance_power" -> t) }
 
     jsObj = about.fold(jsObj) { t => jsObj ++ Json.obj("about" -> t) }
 

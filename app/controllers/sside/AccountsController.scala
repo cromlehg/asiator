@@ -64,12 +64,12 @@ class AccountsController @Inject() (cc: ControllerComponents, dao: DAO, config: 
   import scala.concurrent.Future.{ successful => future }
 
   case class ApproveData(
-    val login:                String,
-    val pwd:                  String,
-    val repwd:                String,
+    val login: String,
+    val pwd: String,
+    val repwd: String,
     val understandNotRecover: Boolean,
-    val haveSecured:          Boolean,
-    val code:                 String)
+    val haveSecured: Boolean,
+    val code: String)
 
   val loginVerifying = nonEmptyText(3, 20).verifying("Must contain lowercase letters and digits only.", name => name.matches("[a-z0-9]{3,20}"))
 
@@ -96,7 +96,7 @@ class AccountsController @Inject() (cc: ControllerComponents, dao: DAO, config: 
   case class RegDataCompany(
     override val email: String,
     override val login: String,
-    val companyName:    String) extends RegData
+    val companyName: String) extends RegData
 
   val authForm = Form(
     mapping(
@@ -117,6 +117,11 @@ class AccountsController @Inject() (cc: ControllerComponents, dao: DAO, config: 
   def login() = Action.async { implicit request =>
     implicit val ac = new AppContext()
     notAuthorized(future(Ok(views.html.app.login(authForm))))
+  }
+
+  def logout = Action.async { implicit request =>
+    implicit val ac = new AppContext()
+    super.logout(Redirect(controllers.sside.routes.AccountsController.login()))
   }
 
   def processLogin() = Action.async { implicit request =>

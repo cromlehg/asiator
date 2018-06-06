@@ -342,5 +342,21 @@ trait DBTableDefinitions {
 
   val transactions = TableQuery[Transactions]
   
+  class ShortOptions(tag: Tag) extends Table[DBShortOption](tag, "short_options") {
+    def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
+    def name = column[String]("name")
+    def descr = column[String]("descr")
+    def ttype = column[String]("type")
+    def value = column[String]("value")
+    def * = (
+        id, 
+        name,
+        descr,
+        ttype,
+        value) <> (DBShortOption.tupled, DBShortOption.unapply)
+  }
+
+  val shortOptions = TableQuery[ShortOptions]
+  
 }
 

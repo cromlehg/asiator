@@ -159,3 +159,11 @@ CREATE TABLE wallets (
   address                   VARCHAR(100) NOT NULL,
   private_key               VARCHAR(100) NOT NULL
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;  
+
+CREATE TABLE short_options (
+  id                        SERIAL PRIMARY KEY,
+  name                      VARCHAR(100) NOT NULL,
+  descr                     VARCHAR(255) NOT NULL,
+  `type`                    VARCHAR(100) NOT NULL,
+  `value`                   VARCHAR(100) NOT NULL
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;  

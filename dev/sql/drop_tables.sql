@@ -31,3 +31,6 @@ DROP TABLE IF EXISTS balances;
 DROP TABLE IF EXISTS positions;
 
 DROP TABLE IF EXISTS wallets;
+
+DROP TABLE IF EXISTS short_options;
+
