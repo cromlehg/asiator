@@ -172,7 +172,7 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
     onlyAuthorized { account =>
       dao.findPostById(postId) map (
         _.fold(BadRequest("Post not found")) { post =>
-          if (account.id == post.ownerId) {
+          if (account.id == post.ownerId || account.isAdmin) {
             val postData = Map("title" -> post.title, "content" -> post.content)
             Ok(views.html.app.createPost(articleForm.bind(postData)))
           } else {
