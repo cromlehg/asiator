@@ -14,6 +14,9 @@ GET    /app/posts/list/filter/:filter/page/:pageId   controllers.sside.PostsCont
 
 GET    /app/posts/list/filter/page/:pageId           controllers.sside.PostsController.posts(pageId: Long)
 
++ nocsrf
+POST   /app/posts/post/:postId/remove                controllers.sside.PostsController.removePost(postId: Long)
+
 GET    /app/posts/post/:postId                       controllers.sside.PostsController.viewPost(postId: Long)
 
 GET    /app/posts/create                             controllers.sside.PostsController.createPost()
@@ -66,7 +69,7 @@ GET    /app/admin/posts/page/:pageId                 controllers.sside.AdminCont
 
 GET    /app/admin/accounts/page/:pageId              controllers.sside.AdminController.adminAccounts(pageId: Int)
 
-+      nocsrf                                                                                                                                                                                                                                                                                                                                                                                                                             
++      nocsrf                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
 POST   /app/admin/options/switchBooleanOption        controllers.sside.AdminController.switchBooleanOption()
 
 

@@ -134,6 +134,25 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
     }
   }
 
+  def removePost(postId: Long) = Action.async { implicit request =>
+    implicit val ac = new AppContext()
+    onlyAuthorized { account =>
+      dao.findPostById(postId) flatMap {
+        _.fold(future(BadRequest("Post with id " + postId + " not exists"))) { post =>
+          if (post.ownerId == account.id || account.isAdmin) {
+            dao.removePost(postId) map { isRemoved =>
+              if (isRemoved) {
+                request.headers.get("referer")
+                  .fold(Redirect(controllers.sside.routes.AppController.index())) { url => Redirect(url) }
+              } else
+                BadRequest("Couldn't remove post with id " + postId)
+            }
+          } else future(BadRequest("You are not authorized to remove this post"))
+        }
+      }
+    }
+  }
+
   def processEditPost(postId: Long) = Action.async { implicit request =>
     onlyAuthorized { account =>
 
@@ -250,10 +269,10 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
   //  }
 
   private def withNameOrId(
-    idFieldName: String,
+    idFieldName:   String,
     nameFieldName: String,
-    idByName: String => Future[Option[Long]],
-    f: Long => Future[Result])(implicit request: Request[JsValue], ac: AppContext): Future[Result] =
+    idByName:      String => Future[Option[Long]],
+    f:             Long => Future[Result])(implicit request: Request[JsValue], ac: AppContext): Future[Result] =
     fieldLongOpt(idFieldName)(_.fold(
       fieldString(nameFieldName) { str =>
         val preapred = str.trim()
@@ -262,9 +281,9 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
       })(f))
 
   private def withNameOrIdOpt(
-    idFieldName: String,
+    idFieldName:   String,
     nameFieldName: String,
-    idByName: String => Future[Option[Long]])(
+    idByName:      String => Future[Option[Long]])(
     f1: Long => Future[Result])(
     f2: Future[Result])(implicit request: Request[JsValue], ac: AppContext): Future[Result] =
     fieldLongOpt(idFieldName)(_.fold(fieldStringOpt(nameFieldName)(_.fold(f2) { str =>
@@ -274,9 +293,9 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
     }))(f1))
 
   private def withNameOrIdSingleOpt(
-    idFieldName: String,
+    idFieldName:   String,
     nameFieldName: String,
-    idByName: String => Future[Option[Long]])(
+    idByName:      String => Future[Option[Long]])(
     f: Option[Long] => Future[Result])(implicit request: Request[JsValue], ac: AppContext): Future[Result] =
     withNameOrIdOpt(idFieldName, nameFieldName, idByName)(t => f(Some(t)))(f(None))
 
