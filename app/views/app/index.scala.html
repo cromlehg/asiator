@@ -3,7 +3,7 @@
 @app.common.main("index") { } {
   @base.common.components.container() {    
    
-<div class="row">
+<div class="row posts-widget">
 <div class="container">
 <h4 class="mt-2 mb-1">Последние</h4>
 <hr class="widget-div">
@@ -13,7 +13,7 @@
 </div>
 
 
-<div class="row">
+<div class="row posts-widget">
 <div class="container">
 <h4 class="mt-2 mb-1">Свежие</h4>
 <hr class="widget-div">
@@ -23,7 +23,7 @@
 </div>
 
 
-<div class="row">
+<div class="row posts-widget">
 <div class="container">
 <h4 class="mt-2 mb-1">Лента</h4>
 <hr class="widget-div">
@@ -46,34 +46,50 @@
 
 <script type="text/javascript">
   $(document).ready(function(){
-	  
-	jsRoutes.controllers.sside.PostsController.findPostsByCategory().ajax({
-	  data: JSON.stringify({page_id: 1, pattern_id: 1, page_size: 4}),
-	  contentType: 'text/json'
-	}).done(data => {
-	  $('#top-feed').append(data);
-    }).fail(data => {
-      alert(data.responseText);
-    });
 
-	jsRoutes.controllers.sside.PostsController.findPostsByCategory().ajax({
-	  data: JSON.stringify({page_id: 1, pattern_id: 2, page_size: 5}),
-	  contentType: 'text/json'
-	}).done(data => {
-	  $('#center-feed').append(data);	  
-	}).fail(data => {
-	  alert(data.responseText);
-	});
+	function updateLineWidget(callabck) {  
+	  jsRoutes.controllers.sside.PostsController.findPostsByCategory().ajax({
+	    data: JSON.stringify({page_id: 1, pattern_id: 1, page_size: 4}),
+	    contentType: 'text/json'
+	  }).done(data => {
+	    $('#top-feed').append(data);
+	    callabck();
+      }).fail(data => {
+        alert(data.responseText);
+      });
+	}
 
-	jsRoutes.controllers.sside.PostsController.findPostsByCategory().ajax({
-      data: JSON.stringify({page_id: 1, pattern_id: 3, page_size: 8}),
-	  contentType: 'text/json'
-	}).done(data => {
-	  $('#after-center-feed').append(data);
-	  //objFunctions.hoverLargeScale('.pic-hover-effect-3', '1.3');
-	}).fail(data => {
-	  alert(data.responseText);
-	});
+	function updateBigThumbWithVericalWidget(callabck) {
+	  jsRoutes.controllers.sside.PostsController.findPostsByCategory().ajax({
+        data: JSON.stringify({page_id: 1, pattern_id: 2, page_size: 5}),
+        contentType: 'text/json'
+	  }).done(data => {
+        $('#center-feed').append(data);	  
+        callabck();
+	  }).fail(data => {
+	    alert(data.responseText);
+	  });
+	}
+
+	function updateListWidget(callabck) {
+      jsRoutes.controllers.sside.PostsController.findPostsByCategory().ajax({
+        data: JSON.stringify({page_id: 1, pattern_id: 3, page_size: 8}),
+	    contentType: 'text/json'
+	  }).done(data => {
+        $('#after-center-feed').append(data);
+        callabck();	  
+	  }).fail(data => {
+	    alert(data.responseText);
+	  });
+	}
+
+    updateLineWidget(function() {
+	  updateBigThumbWithVericalWidget(function() {
+		updateListWidget(function() {
+		  $('.posts-widget').fadeIn(500);
+		})
+	  })
+    })
 
 	
            
