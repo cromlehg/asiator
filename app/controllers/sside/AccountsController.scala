@@ -241,7 +241,7 @@ class AccountsController @Inject() (cc: ControllerComponents, dao: DAO, config: 
     implicit val ac = new AppContext()
     optionalAuthorized { accountOpt =>
       dao.findAccountById(accountId) flatMap (_.fold(future(BadRequest("Account not found with id " + accountId))) { targetAccount =>
-        dao.findPostsWithAccountsByCategoryTagIds(Some(targetAccount.id), None, pageId, None) map { posts =>
+        dao.findPostsWithAccountsByCategoryTagIds(None, Some(targetAccount.id), None, pageId, None) map { posts =>
           Ok(views.html.app.blog(targetAccount, posts))
         }
       })

@@ -1,7 +1,7 @@
 @(active: String)(implicit ac: controllers.AppContext)
 <nav class="navbar navbar-expand-md fixed-top navbar-light bg-light bs-navbar-top">
   <div class="container">
-    <a class="navbar-brand" href="#">
+    <a class="navbar-brand" href="/">
      <img src="/assets/images/logo.png" alt="@controllers.AppConstants.APP_NAME" width="36" height="36"/>
     </a>
     <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
@@ -9,10 +9,10 @@
     </button>
     <div class="collapse navbar-collapse" id="navbarCollapse">
       <ul class="navbar-nav mr-auto">
-        @base.common.menuItem(active, models.PostsFilter.NEW, sside.routes.PostsController.posts(1))
-        @base.common.menuItem(active, models.PostsFilter.TRENDING, sside.routes.PostsController.postsByFilter(1, models.PostsFilter.TRENDING))
-        @base.common.menuItem(active, models.PostsFilter.HOT, sside.routes.PostsController.postsByFilter(1, models.PostsFilter.HOT))
-        @base.common.menuItem(active, models.PostsFilter.PROMOUTED, sside.routes.PostsController.postsByFilter(1, models.PostsFilter.PROMOUTED))
+        @base.common.menuItem(active, models.PostsFilter.MENU_NEW, sside.routes.PostsController.posts(1))
+        @base.common.menuItem(active, models.PostsFilter.MENU_TRENDING, sside.routes.PostsController.postsByFilter(1, models.PostsFilter.TRENDING))
+        @base.common.menuItem(active, models.PostsFilter.MENU_HOT, sside.routes.PostsController.postsByFilter(1, models.PostsFilter.HOT))
+        @base.common.menuItem(active, models.PostsFilter.MENU_PROMOUTED, sside.routes.PostsController.postsByFilter(1, models.PostsFilter.PROMOUTED))
       </ul>
       @headerSearch()
       <ul class="navbar-nav ml-auto">

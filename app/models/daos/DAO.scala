@@ -42,14 +42,12 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
 
   import profile.api._
 
-  val pageSize = 17
-
   val maxLikesView = 10
 
   def getTagsPages(): Future[Int] =
     db.run(tags.size.result) map pages
 
-  def pages(size: Int): Int = pages(size, pageSize)
+  def pages(size: Int): Int = pages(size, AppConstants.DEFAULT_PAGE_SIZE)
 
   def removePost(postId: Long) = {
     val query = for {
@@ -94,7 +92,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
     val now = System.currentTimeMillis()
     db.run(scheduledTasks
       .filter(t => t.taskType === models.TaskType.NOTIFICATIONS && t.executed.isEmpty && t.planned < now)
-      .drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+      .drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0).take(AppConstants.DEFAULT_PAGE_SIZE)
       .join(accounts).on(_.accountId === _.id)
       .join(posts).on { case ((task, account), product) => task.productId === product.id }
       .result) map {
@@ -119,18 +117,18 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
   }
 
   def getPostsPage(pageId: Int): Future[Seq[models.Post]] =
-    db.run(posts.sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize).result) map (_ map postFrom)
+    db.run(posts.sortBy(_.id.desc).drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0).take(AppConstants.DEFAULT_PAGE_SIZE).result) map (_ map postFrom)
 
   def getPostsPages(): Future[Int] =
     db.run(posts.length.result).map { r =>
-      pages(r, pageSize.toInt)
+      pages(r, AppConstants.DEFAULT_PAGE_SIZE.toInt)
     }
 
   def getTagsPage(pageId: Long): Future[Seq[models.Tag]] =
-    db.run(tags.sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize).result) map (_ map tagFrom)
+    db.run(tags.sortBy(_.id.desc).drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0).take(AppConstants.DEFAULT_PAGE_SIZE).result) map (_ map tagFrom)
 
   def getAccountsPage(pageId: Long): Future[Seq[models.Account]] =
-    db.run(accounts.sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize).result)
+    db.run(accounts.sortBy(_.id.desc).drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0).take(AppConstants.DEFAULT_PAGE_SIZE).result)
 
   def getAccountsPages(): Future[Int] =
     db.run(accounts.size.result) map pages
@@ -165,7 +163,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
     getAccountFromQuery(accounts.filter(_.login === login))
 
   def findBalances(pageId: Long): Future[Seq[models.Balance]] =
-    db.run(balances.sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize).result) map (_ map balanceFrom)
+    db.run(balances.sortBy(_.id.desc).drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0).take(AppConstants.DEFAULT_PAGE_SIZE).result) map (_ map balanceFrom)
 
   def findAccountByIdWithBalances(id: Long): Future[Option[Account]] = {
     db.run {
@@ -337,7 +335,9 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
           accounts.filter(_.login.like(searchString)).map(_.id)
         }))
         .joinLeft(likes.filter(t => t.targetType === TargetType.POST && t.ownerId === actorId)).on { case (post, like) => like.targetId === post.id }
-        .sortBy(_._1.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+        .sortBy(_._1.id.desc)
+        .drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0)
+        .take(AppConstants.DEFAULT_PAGE_SIZE)
       dbAccount <- accounts.filter(_.id === dbPost.ownerId)
     } yield (dbPost, dbLikedOpt, dbAccount)
     db.run(query.result).map(_.map {
@@ -363,8 +363,9 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       dbPost <- (posts.filter(t => t.content.like(searchString) || t.title.like(searchString)) union
         posts.filter(_.ownerId in {
           accounts.filter(_.login.like(searchString)).map(_.id)
-        })).sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
-      //dbLiked.joinLeft(likes.filter(t => t.targetType === TargetType.POST && t.ownerId === actorId)).on { case ((post, user), like) => like.targetId === post.id }
+        })).sortBy(_.id.desc)
+        .drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0)
+        .take(AppConstants.DEFAULT_PAGE_SIZE)
       dbAccount <- accounts.filter(_.id === dbPost.ownerId)
     } yield (dbPost, dbAccount)
     db.run(query.result).map(_.map {
@@ -384,6 +385,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
   }
 
   def findPostsWithAccountsByCategoryTagNames(
+    pageSizeOpt: Option[Int],
     actorIdOpt: Option[Long],
     userIdOpt: Option[Long],
     categoryOpt: Option[String],
@@ -391,26 +393,36 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
     tagNamesOpt match {
       case Some(tagNames) =>
         db.run(tags.filter(_.name inSet tagNames).map(_.id).result) flatMap { tagIds =>
-          actorIdOpt.fold(findPostsWithAccountsByCategoryTagIds(userIdOpt, categoryOpt, pageId, Some(tagIds)))(actorId => findPostsWithAccountsByCategoryTagIds(actorId, userIdOpt, categoryOpt, pageId, Some(tagIds)))
+          actorIdOpt.fold {
+            findPostsWithAccountsByCategoryTagIds(pageSizeOpt, userIdOpt, categoryOpt, pageId, Some(tagIds))
+          } { actorId =>
+            findPostsWithAccountsByCategoryTagIds(pageSizeOpt, actorId, userIdOpt, categoryOpt, pageId, Some(tagIds))
+          }
         }
       case _ =>
-        actorIdOpt.fold(findPostsWithAccountsByCategoryTagIds(userIdOpt, categoryOpt, pageId, None))(actorId => findPostsWithAccountsByCategoryTagIds(actorId, userIdOpt, categoryOpt, pageId, None))
+        actorIdOpt.fold {
+          findPostsWithAccountsByCategoryTagIds(pageSizeOpt, userIdOpt, categoryOpt, pageId, None)
+        } { actorId =>
+          findPostsWithAccountsByCategoryTagIds(pageSizeOpt, actorId, userIdOpt, categoryOpt, pageId, None)
+        }
     }
 
   def findPostsPagesWithAccountsByCategoryTagNames(
+    pageSizeOpt: Option[Int],
     userIdOpt: Option[Long],
     categoryOpt: Option[String],
     tagNamesOpt: Option[Seq[String]]): Future[Int] =
     tagNamesOpt match {
       case Some(tagNames) =>
         db.run(tags.filter(_.name inSet tagNames).map(_.id).result) flatMap { tagIds =>
-          findPostsPagesWithAccountsByCategoryTagIds(userIdOpt, categoryOpt, Some(tagIds))
+          findPostsPagesWithAccountsByCategoryTagIds(pageSizeOpt, userIdOpt, categoryOpt, Some(tagIds))
         }
       case _ =>
-        findPostsPagesWithAccountsByCategoryTagIds(userIdOpt, categoryOpt, None)
+        findPostsPagesWithAccountsByCategoryTagIds(pageSizeOpt, userIdOpt, categoryOpt, None)
     }
 
   def findPostsPagesWithAccountsByCategoryTagIds(
+    pageSizeOpt: Option[Int],
     userIdOpt: Option[Long],
     categoryOpt: Option[String],
     tagIdsOpt: Option[Seq[Long]]) = {
@@ -434,6 +446,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
   }
 
   def findPostsWithAccountsByCategoryTagIds(
+    pageSizeOpt: Option[Int],
     userIdOpt: Option[Long],
     categoryOpt: Option[String],
     pageId: Long,
@@ -450,7 +463,8 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
               case Some(PostsFilter.PROMOUTED) => post.promo.desc
               case _ => post.id.desc
             })
-        }.drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+        }.drop(if (pageId > 0) pageSizeOpt.getOrElse(AppConstants.DEFAULT_PAGE_SIZE) * (pageId - 1) else 0)
+        .take(pageSizeOpt.getOrElse(AppConstants.DEFAULT_PAGE_SIZE))
     } yield (dbPost, dbAccount)
     db.run(query.result).map(_.map {
       case (dbPost, dbAccount) =>
@@ -469,24 +483,14 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
   }
 
   def findPostsWithAccountsByCategoryTagIds(
+    pageSizeOpt: Option[Int],
     actorId: Long,
     userIdOpt: Option[Long],
     categoryOpt: Option[String],
     pageId: Long,
     tagIdsOpt: Option[Seq[Long]]): Future[Seq[models.Post]] = {
     val query = for {
-      ((dbPost, dbAccount), dbLikeOpt) <- ({
-        val first = userIdOpt match {
-          case Some(userId) => posts.filter(_.ownerId === userId)
-          case _ => posts
-        }
-        tagIdsOpt match {
-          case Some(tagIds) => first filter (_.id in {
-            tagsToTargets.filter(t => t.tagId.inSet(tagIds) && t.targetType === TargetType.POST).map(_.targetId)
-          })
-          case _ => first
-        }
-      }
+      ((dbPost, dbAccount), dbLikeOpt) <- (findPostsWithAccountsByCategoryTagIdsQuery(userIdOpt, categoryOpt, tagIdsOpt)
         join accounts on { case (post, user) => post.ownerId === user.id })
         .joinLeft(likes.filter(t => t.targetType === TargetType.POST && t.ownerId === actorId)).on { case ((post, user), like) => like.targetId === post.id }
         .sortBy {
@@ -498,7 +502,8 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
               case Some(PostsFilter.PROMOUTED) => post.promo.desc
               case _ => post.id.desc
             })
-        }.drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+        }.drop(if (pageId > 0) pageSizeOpt.getOrElse(AppConstants.DEFAULT_PAGE_SIZE) * (pageId - 1) else 0)
+        .take(pageSizeOpt.getOrElse(AppConstants.DEFAULT_PAGE_SIZE))
     } yield (dbPost, dbAccount, dbLikeOpt)
     db.run(query.result).map(_.map {
       case (dbPost, dbAccount, dbLikeOpt) =>
@@ -524,7 +529,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
     pageId: Long,
     tagNamesOpt: Option[Seq[String]])(implicit ac: AppContext): Future[Seq[models.Post]] =
     db.run(accounts.filter(_.login === userLogin).result.headOption).flatMap(_.fold(Future(Seq[models.Post]())) { user =>
-      findPostsWithAccountsByCategoryTagNames(actorIdOpt, Some(user.id), categoryOpt, pageId, tagNamesOpt)
+      findPostsWithAccountsByCategoryTagNames(None, actorIdOpt, Some(user.id), categoryOpt, pageId, tagNamesOpt)
     })
 
   def findAccountBySUIDAndSessionId(sessionId: Long, sessionKey: String): Future[Option[Account]] = {
@@ -590,7 +595,9 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
         comments on (_.id === _.targetId) join
         accounts on { case ((post, comment), user) => user.id === comment.ownerId } joinLeft
         likes.filter(t => t.targetType === TargetType.COMMENT && t.ownerId === actorAccountId) on { case (((post, comment), user), like) => like.targetId === comment.id })
-        .sortBy { case (((post, comment), user), likeOpt) => comment.id.desc }.drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+        .sortBy { case (((post, comment), user), likeOpt) => comment.id.desc }
+        .drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0)
+        .take(AppConstants.DEFAULT_PAGE_SIZE)
     } yield (dbComment, dbAccount, dbLikeOpt)
     db.run(query.result).map(_.map {
       case (dbComment, dbAccount, dbLikeOpt) =>
@@ -614,7 +621,9 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       ((dbPost, dbComment), dbAccount) <- (posts.filter(_.ownerId === userId) join
         comments on (_.id === _.targetId) join
         accounts on { case ((post, comment), user) => user.id === comment.ownerId })
-        .sortBy { case ((post, comment), user) => comment.id.desc }.drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+        .sortBy { case ((post, comment), user) => comment.id.desc }
+        .drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0)
+        .take(AppConstants.DEFAULT_PAGE_SIZE)
     } yield (dbComment, dbAccount)
     db.run(query.result).map(_.map {
       case (dbComment, dbAccount) =>
@@ -874,12 +883,16 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
         transactions
           .filter(t => ((t.fromType === models.TargetType.ACCOUNT && t.fromId === userId) ||
             (t.toType === models.TargetType.ACCOUNT && t.toId === userId)) && t.scheduled.isDefined)
-          .sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+          .sortBy(_.id.desc)
+          .drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0)
+          .take(AppConstants.DEFAULT_PAGE_SIZE)
       else
         transactions
           .filter(t => (t.fromType === models.TargetType.ACCOUNT && t.fromId === userId) ||
             (t.toType === models.TargetType.ACCOUNT && t.toId === userId))
-          .sortBy(_.id.desc).drop(if (pageId > 0) pageSize * (pageId - 1) else 0).take(pageSize)
+          .sortBy(_.id.desc)
+          .drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0)
+          .take(AppConstants.DEFAULT_PAGE_SIZE)
     } yield (dbTx)
     db.run(query.result).map(_ map transactionFrom)
   }

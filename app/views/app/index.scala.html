@@ -48,7 +48,7 @@
   $(document).ready(function(){
 	  
 	jsRoutes.controllers.sside.PostsController.findPostsByCategory().ajax({
-	  data: JSON.stringify({page_id: 1, pattern_id: 1}),
+	  data: JSON.stringify({page_id: 1, pattern_id: 1, page_size: 4}),
 	  contentType: 'text/json'
 	}).done(data => {
 	  $('#top-feed').append(data);
@@ -57,7 +57,7 @@
     });
 
 	jsRoutes.controllers.sside.PostsController.findPostsByCategory().ajax({
-	  data: JSON.stringify({page_id: 1, pattern_id: 2}),
+	  data: JSON.stringify({page_id: 1, pattern_id: 2, page_size: 5}),
 	  contentType: 'text/json'
 	}).done(data => {
 	  $('#center-feed').append(data);	  
@@ -66,7 +66,7 @@
 	});
 
 	jsRoutes.controllers.sside.PostsController.findPostsByCategory().ajax({
-      data: JSON.stringify({page_id: 1, pattern_id: 3}),
+      data: JSON.stringify({page_id: 1, pattern_id: 3, page_size: 8}),
 	  contentType: 'text/json'
 	}).done(data => {
 	  $('#after-center-feed').append(data);

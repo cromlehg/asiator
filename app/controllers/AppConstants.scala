@@ -3,9 +3,9 @@ package controllers
 object AppConstants {
 
   val APP_NAME = "Asiator"
-  
+
   val VERSION = "0.1a"
-  
+
   val BACKEND_NAME = APP_NAME + " " + VERSION
 
   val PWD_MIN_LENGTH = 10
@@ -13,6 +13,12 @@ object AppConstants {
   val DECIMALS = 100
 
   val ACTIVE_CAMPAINGS_LIMIT = 5
+
+  val MAX_PAGE_SIZE = 100
+
+  val MIN_PAGE_SIZE = 1
+  
+  val DEFAULT_PAGE_SIZE = 17
 
   /**
    *
