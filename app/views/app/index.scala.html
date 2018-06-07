@@ -3,7 +3,7 @@
 @app.common.main("index") { } {
   @base.common.components.container() {    
    
-<div class="row posts-widget">
+<div class="row posts-widget" id="posts-widget-1">
 <div class="container">
 <h4 class="mt-2 mb-1">Последние</h4>
 <hr class="widget-div">
@@ -13,7 +13,7 @@
 </div>
 
 
-<div class="row posts-widget">
+<div class="row posts-widget" id="posts-widget-2">
 <div class="container">
 <h4 class="mt-2 mb-1">Свежие</h4>
 <hr class="widget-div">
@@ -23,7 +23,7 @@
 </div>
 
 
-<div class="row posts-widget">
+<div class="row posts-widget" id="posts-widget-3">
 <div class="container">
 <h4 class="mt-2 mb-1">Лента</h4>
 <hr class="widget-div">
@@ -84,13 +84,16 @@
 	}
 
     updateLineWidget(function() {
-	  updateBigThumbWithVericalWidget(function() {
-		updateListWidget(function() {
-		  $('.posts-widget').fadeIn(500);
-		})
-	  })
+      $('#posts-widget-1').fadeIn(500);
     })
 
+    updateBigThumbWithVericalWidget(function() {
+      $('#posts-widget-2').fadeIn(500);
+    })
+
+    updateListWidget(function() {
+      $('#posts-widget-3').fadeIn(500);
+    })
 	
            
   })
