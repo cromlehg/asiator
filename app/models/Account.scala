@@ -115,3 +115,58 @@ case class Account(
 
 }
 
+object Account {
+
+  def apply(
+    id: Long,
+    login: String,
+    email: String,
+    hash: Option[String],
+    avatar: Option[String],
+    background: Option[String],
+    confirmationStatus: Int,
+    accountStatus: Int,
+    name: Option[String],
+    surname: Option[String],
+    platformEth: Option[String],
+    timezoneId: Int,
+    registered: Long,
+    confirmCode: Option[String],
+    postsCounter: Int,
+    postsCounterStarted: Long,
+    likesCounter: Int,
+    likesCounterStarted: Long,
+    commentsCounter: Int,
+    commentsCounterStarted: Long,
+    postsCount: Long,
+    about: Option[String],
+    accountType: Int): Account =
+    new Account(
+      id,
+      login,
+      email,
+      hash,
+      avatar,
+      background,
+      confirmationStatus,
+      accountStatus,
+      name,
+      surname,
+      platformEth,
+      timezoneId,
+      registered,
+      confirmCode,
+      postsCounter,
+      postsCounterStarted,
+      likesCounter,
+      likesCounterStarted,
+      commentsCounter,
+      commentsCounterStarted,
+      postsCount,
+      about,
+      accountType,
+      Seq.empty[Int],
+      None,
+      None)
+
+}

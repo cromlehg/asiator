@@ -49,7 +49,7 @@ trait DBTableDefinitions {
 
   class Comments(tag: Tag) extends Table[DBComment](tag, "comments") {
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
-    def postId = column[Long]("post_id")
+    def targetId = column[Long]("target_id")
     def ownerId = column[Long]("owner_id")
     def parentId = column[Option[Long]]("parent_id")
     def content = column[String]("content")
@@ -60,7 +60,7 @@ trait DBTableDefinitions {
     def status = column[Int]("status")
     def * = (
         id, 
-        postId, 
+        targetId, 
         ownerId, 
         parentId, 
         content, 
@@ -137,7 +137,7 @@ trait DBTableDefinitions {
 
   val sessions = TableQuery[Sessions]
 
-  class Accounts(tag: Tag) extends Table[DBAccount](tag, "accounts") {
+  class Accounts(tag: Tag) extends Table[models.Account](tag, "accounts") {
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
     def login = column[String]("login")
     def email = column[String]("email")
@@ -184,8 +184,8 @@ trait DBTableDefinitions {
       commentsCounterStarted),( 
         postsCount,
         about,
-        accountType)) <> [DBAccount](t =>
-          DBAccount(
+        accountType)) <> [models.Account](t =>
+          models.Account(
             t._1._1,
             t._1._2,
             t._1._3,

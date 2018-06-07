@@ -40,7 +40,7 @@ trait TraitDTOToModel {
   def commentFrom(dto: DBComment) =
     new models.Comment(
       dto.id,
-      dto.postId,
+      dto.targetId,
       dto.ownerId,
       dto.parentId,
       dto.content,
@@ -76,38 +76,6 @@ trait TraitDTOToModel {
       dto.state,
       dto.currencyId,
       dto.amount)
-
-  def accountFrom(dto: DBAccount): models.Account =
-    new models.Account(
-      dto.id,
-      dto.login,
-      dto.email,
-      dto.hash,
-      dto.avatar,
-      dto.background,
-      dto.confirmationStatus,
-      dto.accountStatus,
-      dto.name,
-      dto.surname,
-      dto.platformEth,
-      dto.timezoneId,
-      dto.registered,
-      dto.confirmCode,
-      dto.postsCounter,
-      dto.postsCounterStarted,
-      dto.likesCounter,
-      dto.likesCounterStarted,
-      dto.commentsCounter,
-      dto.commentsCounterStarted,
-      dto.postsCount,
-      dto.about,
-      dto.accountType,
-      Seq.empty[Int],
-      None,
-      None)
-
-  def accountFrom(dto: DBAccount, inroles: Int*): models.Account = 
-    accountFrom(dto).copy(roles = inroles)
 
   def postFrom(dto: DBPost) =
     new models.Post(

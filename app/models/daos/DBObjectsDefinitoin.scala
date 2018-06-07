@@ -54,7 +54,7 @@ case class DBTagToTarget(
 
 case class DBComment(
   val id: Long,
-  val postId: Long,
+  val targetId: Long,
   val ownerId: Long,
   val parentId: Option[Long],
   val content: String,
@@ -71,31 +71,6 @@ case class DBSession(
   val sessionKey: String,
   val created: Long,
   val expire: Long)
-
-case class DBAccount(
-  val id: Long,
-  val login: String,
-  val email: String,
-  val hash: Option[String],
-  val avatar: Option[String],
-  val background: Option[String],
-  val confirmationStatus: Int,
-  val accountStatus: Int,
-  val name: Option[String],
-  val surname: Option[String],
-  val platformEth: Option[String],
-  val timezoneId: Int,
-  val registered: Long,
-  val confirmCode: Option[String],
-  val postsCounter: Int,
-  val postsCounterStarted: Long,
-  val likesCounter: Int,
-  val likesCounterStarted: Long,
-  val commentsCounter: Int,
-  val commentsCounterStarted: Long,
-  val postsCount: Long,
-  val about: Option[String],
-  val accountType: Int)
 
 case class DBPost(
   val id: Long,

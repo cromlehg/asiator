@@ -11,7 +11,7 @@
     	Html("<a href=\"" + sside.routes.PostsController.viewPost(post.id) + "\" target=\"blank\">" + post.getTrimedTitle(50) + "</a>"),
     	post.createdPrettyTime,
     	Html("<a href=\"" + sside.routes.PostsController.editPost(post.id) + "\"><i class=\"fa fa-edit\" style=\"color: #788187;\"></i></a>" +
-    		"<a href=\"" + sside.routes.PostsController.removePost(post.id) + "\"><i class=\"fa fa-remove\" style=\"color: #788187;\"></i></a>"
+    		"<a href=\"" + sside.routes.PostsController.removePost(post.id) + "\"><i class=\"fa fa-trash-alt\" style=\"color: #788187;\"></i></a>"
     	)  	    	    	
     	)))
     </div>
