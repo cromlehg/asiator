@@ -4,16 +4,15 @@ import controllers.AppContext
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 
-class Balance(
+case class Balance(
   val id:          Long,
   val ownerId:     Long,
   val ownerType:   Int,
-  val currencyId:  Long,
+  val currencyId:  Int,
   val updated:     Long,
   val balanceType: Int,
-  val value:       Long) {
-
-  var currencyOpt: Option[Currency] = None
+  val value:       Long,
+  val currencyOpt: Option[Currency]) {
 
   def toJson()(implicit ac: AppContext): JsObject = {
     var jsObj = Json.obj(
@@ -27,3 +26,45 @@ class Balance(
     jsObj
   }
 }
+
+object Balance {
+
+  def apply(
+    id:          Long,
+    ownerId:     Long,
+    ownerType:   Int,
+    currencyId:  Int,
+    updated:     Long,
+    balanceType: Int,
+    value:       Long,
+    currencyOpt: Option[Currency]): Balance =
+      new Balance(
+        id,
+        ownerId,
+        ownerType,
+        currencyId,
+        updated,
+        balanceType,
+        value,
+        currencyOpt)
+
+  def apply(
+    id:          Long,
+    ownerId:     Long,
+    ownerType:   Int,
+    currencyId:  Int,
+    updated:     Long,
+    balanceType: Int,
+    value:       Long): Balance =
+      new Balance(
+        id,
+        ownerId,
+        ownerType,
+        currencyId,
+        updated,
+        balanceType,
+        value,
+        None)
+
+}
+

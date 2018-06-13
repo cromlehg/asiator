@@ -4,20 +4,16 @@ import play.api.libs.json.JsValue
 import play.api.libs.json.Json
 import controllers.AppContext
 
-class Like(
-  val id:         Long,
-  val ownerId:    Long,
+case class Like(
+  val id: Long,
+  val ownerId: Long,
   val targetType: Int,
-  val targetId:   Long,
-  val created:    Long) extends TraitDateSupports {
-
-  var userLoginOpt: Option[String] = None
-  
-  var displayNameOpt: Option[String] = None
-
-  var ownerOpt: Option[Account] = None
-
-  var rewardOpt: Option[Long] = None
+  val targetId: Long,
+  val created: Long,
+  var userLoginOpt: Option[String],
+  var displayNameOpt: Option[String],
+  var ownerOpt: Option[Account],
+  var rewardOpt: Option[Long]) extends TraitDateSupports {
 
   def createdShortDate = formattedShortDate(created)
 
@@ -34,5 +30,47 @@ class Like(
     jsObj = rewardOpt.fold(jsObj)(t => jsObj ++ Json.obj("reward" -> t))
     jsObj
   }
+
+}
+
+object Like {
+
+  def apply(
+    id: Long,
+    ownerId: Long,
+    targetType: Int,
+    targetId: Long,
+    created: Long,
+    userLoginOpt: Option[String],
+    displayNameOpt: Option[String],
+    ownerOpt: Option[Account],
+    rewardOpt: Option[Long]): Like =
+    new Like(
+      id,
+      ownerId,
+      targetType,
+      targetId,
+      created,
+      userLoginOpt,
+      displayNameOpt,
+      ownerOpt,
+      rewardOpt)
+
+  def apply(
+    id: Long,
+    ownerId: Long,
+    targetType: Int,
+    targetId: Long,
+    created: Long): Like =
+    new Like(
+      id,
+      ownerId,
+      targetType,
+      targetId,
+      created,
+      None,
+      None,
+      None,
+      None)
 
 }

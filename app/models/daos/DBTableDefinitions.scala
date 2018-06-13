@@ -8,32 +8,20 @@ trait DBTableDefinitions {
   protected val driver: JdbcProfile
   import driver.api._
 
-  class Roles(tag: Tag) extends Table[DBRole](tag, "roles") {
+  class Roles(tag: Tag) extends Table[models.Role](tag, "roles") {
     def userId = column[Long]("user_id")
     def role = column[Int]("role")
-    def * = (userId, role) <> (DBRole.tupled, DBRole.unapply)
+    def * = (userId, role) <> [models.Role](t => models.Role(t._1, t._2), models.Role.unapply)
   }
 
   val roles = TableQuery[Roles]
   
-  class Positions(tag: Tag) extends Table[DBPosition](tag, "positions") {
-    def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
-    def itemId = column[Long]("item_id")
-    def timestamp = column[Long]("timestamp")
-    def position = column[String]("position")
-    def longitude = column[Double]("longitude")
-    def latitude = column[Double]("latitude")
-    def accuracy = column[Double]("accuracy")
-    def * = (id, itemId, timestamp, longitude, latitude, accuracy) <> (DBPosition.tupled, DBPosition.unapply)
-  }
-
-  val positions = TableQuery[Positions]
   
-  class ScheduledTasks(tag: Tag) extends Table[DBScheduledTask](tag, "scheduled_tasks") {
-    def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
-    def executed = column[Option[Long]]("executed")
-    def taskType = column[Int]("task_type")
-    def planned = column[Option[Long]]("planned")
+  class ScheduledTasks(tag: Tag) extends Table[models.ScheduledTask](tag, "scheduled_tasks") {
+    def id        = column[Long]("id", O.PrimaryKey, O.AutoInc)
+    def executed  = column[Option[Long]]("executed")
+    def taskType  = column[Int]("task_type")
+    def planned   = column[Option[Long]]("planned")
     def accountId = column[Option[Long]]("account_id")
     def productId = column[Option[Long]]("product_id")
     def * = (
@@ -42,7 +30,15 @@ trait DBTableDefinitions {
         taskType,
         planned,
         accountId,
-        productId) <> (DBScheduledTask.tupled, DBScheduledTask.unapply)
+        productId) <> [models.ScheduledTask]( t => 
+          models.ScheduledTask(t._1, t._2, t._3, t._4, t._5, t._6), t =>
+          Some(
+            t.id,
+            t.executed,
+            t.taskType,
+            t.planned,
+            t.accountId,
+            t.productId))
   }
 
   val scheduledTasks = TableQuery[ScheduledTasks]
@@ -73,44 +69,60 @@ trait DBTableDefinitions {
 
   val comments = TableQuery[Comments]
   
-  class Currencies(tag: Tag) extends Table[DBCurrency](tag, "currencies") {
-    def id = column[Int]("id", O.PrimaryKey, O.AutoInc)
+  class Currencies(tag: Tag) extends Table[models.Currency](tag, "currencies") {
+    def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
     def ticker = column[String]("ticker")
     def name = column[String]("name")
-    def * = (id, ticker, name) <> (DBCurrency.tupled, DBCurrency.unapply)
+    def * = (id, ticker, name) <> [models.Currency](t => models.Currency(t._1, t._2, t._3), models.Currency.unapply)
   }
 
   val currencies = TableQuery[Currencies]
   
-  class Balances(tag: Tag) extends Table[DBBalance](tag, "balances") {
-    def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
-    def ownerId = column[Long]("owner_id")
-    def ownerType = column[Int]("owner_type")
-    def currencyId = column[Int]("currency_id")
-    def updated = column[Long]("updated")
-    def balanceType = column[Int]("balance_type")
-    def value = column[Long]("value")
-    def * = (id, ownerId, ownerType, currencyId, updated, balanceType, value) <> (DBBalance.tupled, DBBalance.unapply)
+  class Balances(tag: Tag) extends Table[models.Balance](tag, "balances") {
+    def id           = column[Long]("id", O.PrimaryKey, O.AutoInc)
+    def ownerId      = column[Long]("owner_id")
+    def ownerType    = column[Int]("owner_type")
+    def currencyId   = column[Int]("currency_id")
+    def updated      = column[Long]("updated")
+    def balanceType  = column[Int]("balance_type")
+    def value        = column[Long]("value")
+    def * = (
+        id, 
+        ownerId, 
+        ownerType, 
+        currencyId, 
+        updated, 
+        balanceType, 
+        value) <> [models.Balance]( t =>
+          models.Balance(t._1, t._2, t._3, t._4, t._5, t._6, t._7), t =>
+          Some((
+            t.id, 
+            t.ownerId, 
+            t.ownerType, 
+            t.currencyId, 
+            t.updated, 
+            t.balanceType, 
+            t.value)))
   }
 
   val balances = TableQuery[Balances]
 
-  class Tags(tag: Tag) extends Table[DBTag](tag, "tags") {
+  class Tags(tag: Tag) extends Table[models.Tag](tag, "tags") {
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
     def name = column[String]("name")
-    def * = (id, name) <> (DBTag.tupled, DBTag.unapply)
+    def * = (id, name) <> (t => models.Tag(t._1, t._2), models.Tag.unapply)
   }
-
+  
   val tags = TableQuery[Tags]
   
-  class TagsToTargets(tag: Tag) extends Table[DBTagToTarget](tag, "tags_to_targets") {
+  class TagsToTargets(tag: Tag) extends Table[models.TagToTarget](tag, "tags_to_targets") {
     def tagId = column[Long]("tag_id")
     def targetId = column[Long]("target_id")
     def targetType = column[Int]("target_type")
     def created = column[Long]("created")
-    def * = (tagId, targetId, targetType, created) <> (DBTagToTarget.tupled, DBTagToTarget.unapply)
+    def * = (tagId, targetId, targetType, created) <> [models.TagToTarget](t => models.TagToTarget(t._1, t._2, t._3, t._4), models.TagToTarget.unapply)
   }
-  
+ 
   val tagsToTargets = TableQuery[TagsToTargets]
   
   class Wallets(tag: Tag) extends Table[DBWallet](tag, "wallets") {
@@ -125,14 +137,15 @@ trait DBTableDefinitions {
 
   val wallets = TableQuery[Wallets]
   
-  class Sessions(tag: Tag) extends Table[DBSession](tag, "sessions") {
+  class Sessions(tag: Tag) extends Table[models.Session](tag, "sessions") {
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
     def userId = column[Long]("user_id")
     def ip = column[String]("ip")
     def sessionKey = column[String]("session_key")
     def created = column[Long]("created")
     def expire = column[Long]("expire")
-    def * = (id, userId, ip, sessionKey, created, expire) <> (DBSession.tupled, DBSession.unapply)
+    def * = (id, userId, ip, sessionKey, created, expire) <> (t =>
+      models.Session(t._1, t._2, t._3, t._4, t._5, t._6), models.Session.unapply)
   }
 
   val sessions = TableQuery[Sessions]
@@ -281,24 +294,38 @@ trait DBTableDefinitions {
   }
 
   val posts = TableQuery[Posts]
-
-  class Likes(tag: Tag) extends Table[DBLike](tag, "likes") {
+  
+  class Likes(tag: Tag) extends Table[models.Like](tag, "likes") {
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
     def ownerId = column[Long]("owner_id")
     def targetType = column[Int]("target_type")
     def targetId = column[Long]("target_id")
     def created = column[Long]("created")
+
     def * = (
       id,
       ownerId,
       targetType,
       targetId,
-      created) <> (DBLike.tupled, DBLike.unapply)
+      created) <> [models.Like](t =>
+        models.Like(
+            t._1,
+            t._2,
+            t._3,
+            t._4,
+            t._5),t => Some(
+            t.id,
+      t.ownerId,
+      t.targetType,
+      t.targetId,
+      t.created
+            ))
+
   }
 
   val likes = TableQuery[Likes]
 
-  class Transactions(tag: Tag) extends Table[DBTransaction](tag, "txs") {
+  class Transactions(tag: Tag) extends Table[models.Transaction](tag, "txs") {
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
     def created = column[Long]("created")
     def scheduled = column[Option[Long]]("scheduled")
@@ -316,9 +343,11 @@ trait DBTableDefinitions {
     def txType = column[Int]("type")
     def msg = column[Option[String]]("msg")
     def state = column[Int]("state")
-    def currencyId = column[Int]("currency_id")
+    def currency = column[Int]("currency")
     def amount = column[Long]("amount")
-    def * = (
+    
+    
+    def * = ((
       id,
       created,
       scheduled,
@@ -330,30 +359,67 @@ trait DBTableDefinitions {
       fromRouteType,
       toRouteType,
       fromRouteId,
-      toRouteId,
-      from,
-      to,
-      txType,
-      msg,
-      state,
-      currencyId,
-      amount) <> (DBTransaction.tupled, DBTransaction.unapply)
+      toRouteId),( 
+        from,
+        to,
+        txType,
+        msg,
+        state,
+        currency,
+        amount)) <> [models.Transaction](t =>
+          models.Transaction(
+            t._1._1,
+            t._1._2,
+            t._1._3,
+            t._1._4,
+            t._1._5,
+            t._1._6,
+            t._1._7,
+            t._1._8,
+            t._1._9,
+            t._1._10,
+            t._1._11,
+            t._1._12,
+            t._2._1,
+            t._2._2,
+            t._2._3,
+            t._2._4,
+            t._2._5,
+            t._2._6,
+            t._2._7), t => Some(
+     (t.id,
+      t.created,
+      t.scheduled,
+      t.processed,
+      t.fromType,
+      t.toType,
+      t.fromId,
+      t.toId,
+      t.fromRouteType,
+      t.toRouteType,
+      t.fromRouteId,
+      t.toRouteId),( 
+        t.from,
+        t.to,
+        t.txType,
+        t.msg,
+        t.state,
+        t.currencyId,
+        t.amount))   
+      )
+    
   }
 
   val transactions = TableQuery[Transactions]
   
-  class ShortOptions(tag: Tag) extends Table[DBShortOption](tag, "short_options") {
+  class ShortOptions(tag: Tag) extends Table[models.ShortOption](tag, "short_options") {
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
     def name = column[String]("name")
-    def descr = column[String]("descr")
-    def ttype = column[String]("type")
     def value = column[String]("value")
-    def * = (
-        id, 
-        name,
-        descr,
-        ttype,
-        value) <> (DBShortOption.tupled, DBShortOption.unapply)
+    def ttype = column[String]("type")
+    def descr = column[String]("descr")
+    def * = (id, name, value, ttype, descr) <> [models.ShortOption](t => 
+      models.ShortOption(t._1, t._2, t._3, t._4, t._5), models.ShortOption.unapply)
   }
 
   val shortOptions = TableQuery[ShortOptions]

@@ -30,10 +30,6 @@ case class DBPosition(
   val latitude: Double,
   val accuracy: Double)
 
-case class DBRole(
-  userId: Long,
-  role: Int)
-
 case class DBScheduledTask(
   val id: Long,
   val executed: Option[Long],
@@ -41,16 +37,6 @@ case class DBScheduledTask(
   val planned: Option[Long],
   val accountId: Option[Long],
   val productId: Option[Long])
-
-case class DBTag(
-  id: Long,
-  name: String)
-
-case class DBTagToTarget(
-  tagId: Long,
-  targetId: Long,
-  targetType: Int,
-  created: Long)
 
 case class DBComment(
   val id: Long,
@@ -92,81 +78,4 @@ case class DBPost(
   val reward: Long,
   val rate: Int,
   val rateCount: Int)
-
-case class DBLike(
-  val id: Long,
-  val ownerId: Long,
-  val targetType: Int,
-  val targetId: Long,
-  val created: Long)
-
-case class DBTransaction(
-  val id: Long,
-  val created: Long,
-  val scheduled: Option[Long],
-  val processed: Option[Long],
-  val fromType: Int,
-  val toType: Int,
-  val fromId: Option[Long],
-  val toId: Option[Long],
-  val fromRouteType: Option[Int],
-  val toRouteType: Option[Int],
-  val fromRouteId: Option[Long],
-  val toRouteId: Option[Long],
-  val from: Option[String],
-  val to: Option[String],
-  val txType: Int,
-  val msg: Option[String],
-  val state: Int,
-  val currencyId: Int,
-  val amount: Long)
-
-case class DBProduct(
-  val id: Long,
-  val ownerId: Long,
-  val name: String,
-  val alcohol: Int,
-  val value: Int,
-  val address: Option[String],
-  val about: Option[String],
-  val aboutType: Option[Int],
-  val created: Long,
-  val reviewsCount: Int,
-  val likesCount: Int,
-  val commentsCount: Int,
-  val thumbnail: Option[String])
-
-case class DBBatch(
-  val id: Long,
-  val productId: Long,
-  val created: Long,
-  val count: Int,
-  val price: Long)
-
-case class DBItem(
-  val id: Long,
-  val batchId: Long,
-  val code: String,
-  val status: Int,
-  val bought: Option[Long],
-  val buyerId: Option[Long])
-
-case class DBMarketingCampaign(
-  val id: Long,
-  val productId: Long,
-  val initialCount: Int,
-  val count: Int,
-  val price: Long,
-  val start: Long,
-  val end: Long,
-  val status: Int,
-  val descr: Option[String],
-  val title: String)
-
-case class DBShortOption(
-  val id: Long,
-  val name: String,
-  val descr: String,
-  val ttype: String,
-  val value: String)
 

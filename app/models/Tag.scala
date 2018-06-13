@@ -34,17 +34,26 @@ import org.jsoup.Jsoup
 import controllers.AppConstants
 import controllers.AppContext
 
-class Tag(
-  val id:   Long,
+case class Tag(
+  val id: Long,
   val name: String) extends TraitDateSupports {
 
-  def toCommonJs(implicit ac: AppContext): JsObject = {
+  def toCommonJs: JsObject = {
     var jsObj = Json.obj(
       "id" -> id,
       "name" -> name)
     jsObj
   }
 
-  def toJson(implicit ac: AppContext): JsValue = toCommonJs
+  def toJson: JsValue = toCommonJs
+
+}
+
+object Tag {
+
+  def apply(
+    id: Long,
+    name: String): Tag =
+    new Tag(id, name)
 
 }

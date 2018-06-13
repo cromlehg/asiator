@@ -1,6 +1,6 @@
 package models
 
-class ShortOption(
+case class ShortOption(
   val id: Long,
   val name: String,
   val descr: String,
@@ -8,6 +8,23 @@ class ShortOption(
   val value: String) {
 
   def toBoolean = value.toBoolean
+
+}
+
+object ShortOption {
+
+  def apply(
+    id: Long,
+    name: String,
+    value: String,
+    ttype: String,
+    descr: String): ShortOption =
+    new ShortOption(
+      id,
+      name,
+      value,
+      ttype,
+      descr)
 
 }
 

@@ -4,30 +4,28 @@ import play.api.libs.json.JsValue
 import play.api.libs.json.Json
 import controllers.AppContext
 
-class Transaction(
-  val id:            Long,
-  val created:       Long,
-  val scheduled:     Option[Long],
-  val processed:     Option[Long],
-  val fromType:      Int,
-  val toType:        Int,
-  val fromId:        Option[Long],
-  val toId:          Option[Long],
+case class Transaction(
+  val id: Long,
+  val created: Long,
+  val scheduled: Option[Long],
+  val processed: Option[Long],
+  val fromType: Int,
+  val toType: Int,
+  val fromId: Option[Long],
+  val toId: Option[Long],
   val fromRouteType: Option[Int],
-  val toRouteType:   Option[Int],
-  val fromRouteId:   Option[Long],
-  val toRouteId:     Option[Long],
-  val from:          Option[String],
-  val to:            Option[String],
-  val txType:        Int,
-  val msg:           Option[String],
-  val state:         Int,
-  val currencyId:    Int,
-  val amount:        Long) extends TraitDateSupports {
-
-  var fromAccountOpt: Option[Account] = None
-
-  var toAccountOpt: Option[Account] = None
+  val toRouteType: Option[Int],
+  val fromRouteId: Option[Long],
+  val toRouteId: Option[Long],
+  val from: Option[String],
+  val to: Option[String],
+  val txType: Int,
+  val msg: Option[String],
+  val state: Int,
+  val currencyId: Int,
+  val amount: Long,
+  val fromAccountOpt: Option[Account],
+  val toAccountOpt: Option[Account]) extends TraitDateSupports {
 
   def registerdShortDate = formattedShortDate(created)
 
@@ -59,5 +57,97 @@ class Transaction(
 
     jsObj
   }
+
+}
+
+object Transaction {
+
+  def apply(
+    id: Long,
+    created: Long,
+    scheduled: Option[Long],
+    processed: Option[Long],
+    fromType: Int,
+    toType: Int,
+    fromId: Option[Long],
+    toId: Option[Long],
+    fromRouteType: Option[Int],
+    toRouteType: Option[Int],
+    fromRouteId: Option[Long],
+    toRouteId: Option[Long],
+    from: Option[String],
+    to: Option[String],
+    txType: Int,
+    msg: Option[String],
+    state: Int,
+    currency: Int,
+    amount: Long,
+    fromUserOpt: Option[Account],
+    toUserOpt: Option[Account]): Transaction =
+    new Transaction(
+      id,
+      created,
+      scheduled,
+      processed,
+      fromType,
+      toType,
+      fromId,
+      toId,
+      fromRouteType,
+      toRouteType,
+      fromRouteId,
+      toRouteId,
+      from,
+      to,
+      txType,
+      msg,
+      state,
+      currency,
+      amount,
+      fromUserOpt,
+      toUserOpt)
+
+  def apply(
+    id: Long,
+    created: Long,
+    scheduled: Option[Long],
+    processed: Option[Long],
+    fromType: Int,
+    toType: Int,
+    fromId: Option[Long],
+    toId: Option[Long],
+    fromRouteType: Option[Int],
+    toRouteType: Option[Int],
+    fromRouteId: Option[Long],
+    toRouteId: Option[Long],
+    from: Option[String],
+    to: Option[String],
+    txType: Int,
+    msg: Option[String],
+    state: Int,
+    currency: Int,
+    amount: Long): Transaction =
+    new Transaction(
+      id,
+      created,
+      scheduled,
+      processed,
+      fromType,
+      toType,
+      fromId,
+      toId,
+      fromRouteType,
+      toRouteType,
+      fromRouteId,
+      toRouteId,
+      from,
+      to,
+      txType,
+      msg,
+      state,
+      currency,
+      amount,
+      None,
+      None)
 
 }
