@@ -27,6 +27,9 @@ class Authorizable @Inject() (cc: ControllerComponents, dao: DAO, config: Config
 
   val SESSION_KEY = "session_key"
 
+  protected def onlyAdmin[T](f: models.Account => Future[Result])(implicit request: Request[T], ac: AppContext): Future[Result] =
+    onlyAdmin(future(Redirect(controllers.routes.AccountsController.login())))(f)
+
   protected def onlyAdmin[T](notAuthorizedF: Future[Result])(f: models.Account => Future[Result])(implicit request: Request[T], ac: AppContext): Future[Result] =
     onlyAuthorized(notAuthorizedF)(a => if (a.isAdmin) f(a) else notAuthorizedF)
 
@@ -111,6 +114,13 @@ class Authorizable @Inject() (cc: ControllerComponents, dao: DAO, config: Config
 
         }
     })
+
+  protected def authorizedNotLocked[T](notAuthorized: Future[Result])(f: models.Account => Future[Result])(implicit request: Request[T], ac: AppContext): Future[Result] =
+    onlyAuthorized(notAuthorized)(a => if (a.accountStatus == models.AccountStatus.NORMAL) f(a) else notAuthorized)
+
+  protected def authorizedNotLocked[T](f: models.Account => Future[Result])(implicit request: Request[T], ac: AppContext): Future[Result] =
+    onlyAuthorized(a => if (a.accountStatus == models.AccountStatus.NORMAL) f(a) else future(BadRequest("Your account is blocked!")))
+
 
   //  def withAppContext[T](bodyParser: play.api.mvc.BodyParser[T])(f: (Request[T], AppContext) => Future[Result]): Action[T] =
   //    Action.async[T](bodyParser)(request => f(request, new AppContext()))

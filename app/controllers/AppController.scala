@@ -1,4 +1,4 @@
-package controllers.sside
+package controllers
 
 import scala.concurrent.ExecutionContext
 
@@ -11,8 +11,6 @@ import play.api.mvc.AnyContent
 import play.api.mvc.ControllerComponents
 import play.api.mvc.Request
 import com.typesafe.config.Config
-import controllers.AppContext
-import controllers.Authorizable
 
 @Singleton
 class AppController @Inject() (cc: ControllerComponents, dao: DAO, config: Config)(implicit ec: ExecutionContext)
@@ -27,11 +25,6 @@ class AppController @Inject() (cc: ControllerComponents, dao: DAO, config: Confi
     }
   }
 
-  //Action(Redirect(controllers.sside.routes.PostsController.posts(1)))
-
-  //  def index() = Action { implicit request: Request[AnyContent] =>
-  //    Ok(views.html.status())
-  //  }
   def status = Action.async { implicit request =>
     implicit val ac = new AppContext()
     dao.getStats map { stats =>

@@ -1,0 +1,34 @@
+@(account: models.Account, posts: Seq[models.Post], pageId: Int, pagesCount: Int)(implicit flash: Flash, messages: Messages, ac: controllers.AppContext, req: play.api.mvc.RequestHeader)
+
+@app.admin.adminMain("moderate posts") { } {
+  @base.common.components.container() {
+
+    @paginationControlForModeratePosts(pageId, pagesCount)
+ 
+    <div class="row">
+    @base.common.components.table(Seq("id", "type", "title", "created", "moderate", "actions"), posts.map( post => Seq(
+    	post.id, 
+      Html("<a href=\"" + routes.PostsController.viewPost(post.id) + "\" target=\"blank\">" + post.getTrimedTitle(50) + "</a>"),
+    	post.createdPrettyTime,
+    	if(post.moderateStatus == models.ModerateStatus.NEED_A_MODERATION) {
+    	  Html("<span class=\"badge badge-secondary\">need</span>")
+    	} else if(post.moderateStatus == models.ModerateStatus.SUCCESS) {
+    	  Html("<span class=\"badge badge-success\">success</span>")
+    	} else {
+    	  Html("<span class=\"badge badge-error\">failed</span>")
+    	},
+    	Html("<a href=\"" + routes.PostsController.editPost(post.id) + "\"><i class=\"fa fa-edit\" style=\"color: #788187;\"></i></a>" +
+           "<a href=\"" + routes.PostsController.removePost(post.id) + "\"><i class=\"fa fa-trash-alt\" style=\"color: #788187;\"></i></a>" +
+           "<a href=\"" + routes.PostsController.moderatePost(post.id, models.ModerateStatus.SUCCESS) + "\" class=\"badge badge-success\">success</a>" +  
+           "<a href=\"" + routes.PostsController.moderatePost(post.id, models.ModerateStatus.FAILED) + "\" class=\"badge badge-primary\">failed</a>")
+    	)))
+    </div>
+    
+    @paginationControlForModeratePosts(pageId, pagesCount)
+     
+  }
+} { 
+
+}
+
+

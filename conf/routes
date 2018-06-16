@@ -4,72 +4,80 @@
 # ~~~~
 
 # An example controller showing a sample home page
-GET    /                                             controllers.sside.AppController.index
+GET    /                                             controllers.AppController.index
 
-GET    /dev/status                                   controllers.sside.AppController.status
+GET    /dev/status                                   controllers.AppController.status
 
-GET    /dev/balances/list/page/:pageId               controllers.sside.BalancesController.balances(pageId: Long)
+GET    /dev/balances/list/page/:pageId               controllers.BalancesController.balances(pageId: Long)
 
-GET    /app/posts/list/filter/:filter/page/:pageId   controllers.sside.PostsController.postsByFilter(pageId: Long, filter: String)
+GET    /app/posts/list/filter/:filter/page/:pageId   controllers.PostsController.postsByFilter(pageId: Long, filter: String)
 
-GET    /app/posts/list/filter/page/:pageId           controllers.sside.PostsController.posts(pageId: Long)
+GET    /app/posts/list/filter/page/:pageId           controllers.PostsController.posts(pageId: Long)
 
-GET    /app/posts/post/:postId/remove                controllers.sside.PostsController.removePost(postId: Long)
+GET    /app/posts/post/:postId/remove                controllers.PostsController.removePost(postId: Long)
 
-GET    /app/posts/post/:postId                       controllers.sside.PostsController.viewPost(postId: Long)
+GET    /app/posts/post/:postId                       controllers.PostsController.viewPost(postId: Long)
 
-GET    /app/posts/create                             controllers.sside.PostsController.createPost()
-
-+ nocsrf
-POST   /app/posts/create                             controllers.sside.PostsController.processCreatePost()
-
-GET    /app/posts/edit/:postId                       controllers.sside.PostsController.editPost(postId: Long)
+GET    /app/posts/create                             controllers.PostsController.createPost
 
 + nocsrf
-POST   /app/posts/edit/:postId                       controllers.sside.PostsController.processEditPost(postId: Long)
+POST   /app/posts/create                             controllers.PostsController.processCreatePost
 
-GET    /app/login                                    controllers.sside.AccountsController.login()
-
-+ nocsrf
-POST   /app/login                                    controllers.sside.AccountsController.processLogin()
-
-GET    /app/logout                                   controllers.sside.AccountsController.logout()
-
-GET    /app/profile/:accountId/blog/:pageId          controllers.sside.AccountsController.blog(accountId: Long, pageId: Long)
-
-GET    /app/register/company                         controllers.sside.AccountsController.registerCompany()
-
-GET    /app/register/user                            controllers.sside.AccountsController.registerUser()
+GET    /app/posts/edit/:postId                       controllers.PostsController.editPost(postId: Long)
 
 + nocsrf
-POST   /app/register/company                         controllers.sside.AccountsController.registerProcessCompany()
+POST   /app/posts/edit/:postId                       controllers.PostsController.processEditPost(postId: Long)
+
+GET    /app/login                                    controllers.AccountsController.login
 
 + nocsrf
-POST   /app/register/user                            controllers.sside.AccountsController.registerProcessUser()
+POST   /app/login                                    controllers.AccountsController.processLogin
 
-GET    /app/register/approve/:login/:code            controllers.sside.AccountsController.approveRegister(login: String, code: String)
+GET    /app/logout                                   controllers.AccountsController.logout
+
+GET    /app/profile/:accountId/blog/:pageId          controllers.AccountsController.blog(accountId: Long, pageId: Long)
+
+GET    /app/register/company                         controllers.AccountsController.registerCompany
+
+GET    /app/register/user                            controllers.AccountsController.registerUser
 
 + nocsrf
-POST   /app/register/approve                         controllers.sside.AccountsController.processApproveRegister()
+POST   /app/register/company                         controllers.AccountsController.registerProcessCompany
+
++ nocsrf
+POST   /app/register/user                            controllers.AccountsController.registerProcessUser
+
+GET    /app/register/approve/:login/:code            controllers.AccountsController.approveRegister(login: String, code: String)
+
++ nocsrf
+POST   /app/register/approve                         controllers.AccountsController.processApproveRegister
 
 
 
 + nocsrf
-POST   /app/posts/find                               controllers.sside.PostsController.findPostsByCategory()
+POST   /app/posts/find                               controllers.PostsController.findPostsByCategory
 
 
-GET    /app/admin                                    controllers.sside.AdminController.admin()
+GET    /app/admin                                    controllers.AdminController.admin
 
-GET    /app/admin/stats                              controllers.sside.AdminController.adminStats()
+GET    /app/admin/stats                              controllers.AdminController.stats
 
-GET    /app/admin/options                            controllers.sside.AdminController.adminOptions()
+GET    /app/admin/options                            controllers.OptionsController.options
 
-GET    /app/admin/posts/page/:pageId                 controllers.sside.AdminController.adminPosts(pageId: Int)
+GET    /app/admin/posts/page/:pageId                 controllers.PostsController.adminPosts(pageId: Int)
 
-GET    /app/admin/accounts/page/:pageId              controllers.sside.AdminController.adminAccounts(pageId: Int)
+GET    /app/admin/posts/page/:pageId                 controllers.PostsController.adminModerationPosts(pageId: Int)
+
+GET    /app/admin/accounts/page/:pageId                           controllers.AccountsController.adminAccounts(pageId: Int, filter: Option[String])
+
+GET    /app/admin/accounts/account/:accountId/setstatus/:status   controllers.AccountsController.setAccountStatus(accountId: Long, status: Int)
+
+GET    /app/admin/posts/post/moderate/:moderateStatus/:postId   controllers.PostsController.moderatePost(postId: Long, moderateStatus: Int)
+
+
 
 +      nocsrf                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
-POST   /app/admin/options/switchBooleanOption        controllers.sside.AdminController.switchBooleanOption()
+POST   /app/admin/options/switchBooleanOption        controllers.OptionsController.switchBooleanOption
 
 
 # Map static resources from the /public folder to the /assets URL path

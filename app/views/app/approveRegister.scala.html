@@ -9,7 +9,7 @@
   <p>Choose your password. Make sure you do not forget it.</p>
   <p class="mb-5"><strong>@controllers.AppConstants.APP_NAME cannot recover passwords!</strong></p>
   
-  @b4.form(sside.routes.AccountsController.processApproveRegister) {
+  @b4.form(routes.AccountsController.processApproveRegister) {
     @b4.hidden( inForm("code") )
     @b4.text( inForm("login"), '_label -> "Username", 'readonly -> true )
     @b4.text( inForm("pwd"), '_label -> "Generated password" )

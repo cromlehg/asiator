@@ -7,10 +7,10 @@
     </button>
     <div class="collapse navbar-collapse" id="navbarCollapse">
       <ul class="navbar-nav mr-auto">
-        @base.common.menuItem(active, "blog", sside.routes.AccountsController.blog(account.id, 1))
+        @base.common.menuItem(active, "blog",   routes.AccountsController.blog(account.id, 1))
       </ul>
       <ul class="navbar-nav ml-auto">
-        @base.common.menuItem(active, "wallet", sside.routes.AccountsController.login())
+        @base.common.menuItem(active, "wallet", routes.AccountsController.login())
       </ul>
     </div>
   </div>

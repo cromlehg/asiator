@@ -3,9 +3,9 @@ package models
 case class ShortOption(
   val id: Long,
   val name: String,
-  val descr: String,
+  val value: String,
   val ttype: String,
-  val value: String) {
+  val descr: String) {
 
   def toBoolean = value.toBoolean
 
@@ -35,5 +35,7 @@ object ShortOptions {
   val ARTICLES_CHANGE_ALLOWED = "ARTICLES_CHANGE_ALLOWED"
   
   val ARTICLES_POST_ALLOWED = "ARTICLES_POST_ALLOWED"
+
+  val ARTICLES_PREMODERATION = "ARTICLES_PREMODERATION"
 
 }

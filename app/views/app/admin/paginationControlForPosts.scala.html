@@ -3,10 +3,10 @@
     <div class="row">
       <div class="btn-group center-block mx-auto mb-4 mt-4">
         @if(pageId > 1) {
-          <a href="@sside.routes.AdminController.adminPosts(pageId - 1)" class="btn btn-outline-info">prev</a>
+          <a href="@routes.PostsController.adminPosts(pageId - 1)" class="btn btn-outline-info">prev</a>
         }	
         @if(pageId < pagesCount) {
-          <a href="@sside.routes.AdminController.adminPosts(pageId + 1)" class="btn btn-outline-info">next</a>
+          <a href="@routes.PostsController.adminPosts(pageId + 1)" class="btn btn-outline-info">next</a>
         }
       </div>
     </div>

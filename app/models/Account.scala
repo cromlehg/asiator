@@ -113,6 +113,24 @@ case class Account(
     ac.authorizedOpt.fold(jsObj)(_ => toJsonAuth(jsObj))
   }
 
+  def loginMatchedBy(filterOpt: Option[String]): String =
+    filterOpt.fold(login) { filter =>
+      val start = login.indexOf(filter)
+      val end = start + filter.length;
+      val s = "<strong>"
+      val e = "</strong>"
+      if (start == 0 && end == login.length) {
+        s + login + e
+      } else if (start == 0 && end != login.length) {
+        s + login.substring(0, end) + e + login.substring(end, login.length)
+      } else if (start != 0 && end == login.length) {
+        login.substring(0, start) + s + login.substring(start, login.length) + e
+      } else {
+        login.substring(0, start) + s + login.substring(start, end) + e + login.substring(end, login.length)
+      }
+    }
+
+
 }
 
 object Account {

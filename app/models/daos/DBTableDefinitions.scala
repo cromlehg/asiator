@@ -125,18 +125,6 @@ trait DBTableDefinitions {
  
   val tagsToTargets = TableQuery[TagsToTargets]
   
-  class Wallets(tag: Tag) extends Table[DBWallet](tag, "wallets") {
-    def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
-    def ownerId = column[Option[Long]]("owner_id")
-    def ownerTypeId = column[Int]("owner_type_id")
-    def baseCurrencyId = column[Int]("base_currency_id")
-    def address = column[String]("address")
-    def privateKey = column[String]("private_key")
-    def * = (id, ownerId, ownerTypeId, baseCurrencyId, address, privateKey) <> (DBWallet.tupled, DBWallet.unapply)
-  }
-
-  val wallets = TableQuery[Wallets]
-  
   class Sessions(tag: Tag) extends Table[models.Session](tag, "sessions") {
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
     def userId = column[Long]("user_id")
@@ -251,7 +239,7 @@ trait DBTableDefinitions {
 
   val accounts = TableQuery[Accounts]
 
-  class Posts(tag: Tag) extends Table[DBPost](tag, "posts") {
+  class Posts(tag: Tag) extends Table[models.Post](tag, "posts") {
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
     def ownerId = column[Long]("owner_id")
     def targetId = column[Option[Long]]("target_id")
@@ -271,6 +259,8 @@ trait DBTableDefinitions {
     def reward = column[Long]("reward")
     def rate = column[Int]("rate")
     def rateCount = column[Int]("rate_count")
+    def moderateStatus = column[Int]("moderate_status")
+
     def * = (
       id,
       ownerId,
@@ -290,7 +280,51 @@ trait DBTableDefinitions {
       viewsCount,
       reward,
       rate,
-      rateCount)   <> (DBPost.tupled, DBPost.unapply)
+      rateCount,
+      moderateStatus) <> [models.Post]( t =>
+          models.Post(
+            t._1,
+            t._2,
+            t._3,
+            t._4,
+            t._5,
+            t._6,
+            t._7,
+            t._8,
+            t._9,
+            t._10,
+            t._11,
+            t._12,
+            t._13,
+            t._14,
+            t._15,
+            t._16,
+            t._17,
+            t._18,
+            t._19,
+            t._20), t =>
+          Some((
+      t.id,
+      t.ownerId,
+      t.targetId,
+      t.title,
+      t.thumbnail,
+      t.content,
+      t.contentType,
+      t.postType,
+      t.status,
+      t.promo,
+      t.typeStatus,
+      t.likesCount,
+      t.commentsCount,
+      t.postsCount,
+      t.created,
+      t.viewsCount,
+      t.reward,
+      t.rate,
+      t.rateCount,
+      t.moderateStatus)))
+
   }
 
   val posts = TableQuery[Posts]

@@ -100,7 +100,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       .result) map {
       _.map {
         case ((task, account), product) =>
-          task.copy(emailOpt = Some(account.email), productOpt = Some(postFrom(product)))
+          task.copy(emailOpt = Some(account.email), productOpt = Some(product))
       }
     }
   }
@@ -116,21 +116,41 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
   }
 
   def getPostsPage(pageId: Int): Future[Seq[models.Post]] =
-    db.run(posts.sortBy(_.id.desc).drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0).take(AppConstants.DEFAULT_PAGE_SIZE).result) map (_ map postFrom)
+    db.run(posts.sortBy(_.id.desc).drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0).take(AppConstants.DEFAULT_PAGE_SIZE).result)
 
   def getPostsPages(): Future[Int] =
     db.run(posts.length.result).map { r =>
       pages(r, AppConstants.DEFAULT_PAGE_SIZE.toInt)
     }
 
+  def setModerateStatusToPost(postId: Long, modStatus: Int) =
+    db.run(posts.filter(_.id === postId).map(_.moderateStatus).update(modStatus).transactionally).map(_ == 1)
+
   def getTagsPage(pageId: Long): Future[Seq[models.Tag]] =
     db.run(tags.sortBy(_.id.desc).drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0).take(AppConstants.DEFAULT_PAGE_SIZE).result)
 
-  def getAccountsPage(pageId: Long): Future[Seq[models.Account]] =
-    db.run(accounts.sortBy(_.id.desc).drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0).take(AppConstants.DEFAULT_PAGE_SIZE).result)
 
-  def getAccountsPages(): Future[Int] =
-    db.run(accounts.size.result) map pages
+  def setAccountStatus(accountId: Long, status: Int) =
+    db.run(accounts.filter(_.id === accountId).map(_.accountStatus).update(status).transactionally).map(_ == 1)
+
+  def getAccounts(filterOpt: Option[String], pageId: Int): Future[Seq[models.Account]] =
+    filterOpt.fold {
+      db.run(accounts.sortBy(_.id.desc).drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0).take(AppConstants.DEFAULT_PAGE_SIZE).result)
+    } { filter =>
+      db.run(accounts.filter(_.login like ("%" + filter + "%")).sortBy(_.id.desc).drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0).take(AppConstants.DEFAULT_PAGE_SIZE).result)
+    }
+
+  def getAccountsPagesCount(filterOpt: Option[String]): Future[Int] =
+    filterOpt.fold {
+      db.run(accounts.length.result).map { r =>
+        pages(r, AppConstants.DEFAULT_PAGE_SIZE)
+      }
+    } { filter =>
+      db.run(accounts.filter(_.login like ("%" + filter + "%")).length.result).map { r =>
+        pages(r, AppConstants.DEFAULT_PAGE_SIZE)
+      }
+    }
+
 
   def findAccountById(id: Long) =
     getAccountFromQuery(accounts.filter(_.id === id))
@@ -209,18 +229,28 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       dbPost <- posts.filter(_.id === postId).result.head
       dbAccount <- accounts.filter(_.id === dbPost.ownerId).result.head
     } yield (dbPost, dbAccount)) map {
-      case (dbPost, dbAccount) =>
-        val post: models.Post = postFrom(dbPost)
-        post.ownerOpt = Some(dbAccount)
-        Some(post)
+      case (dbPost, dbAccount) => Some(dbPost.copy(ownerOpt = Some(dbAccount)))
     } flatMap (
       _ match {
-        case Some(post) => findLikes(Seq(post.id), TargetType.POST).map { likes =>
-          post.likes = likes
-          Some(post)
+        case Some(post) => findLikes(Seq(post.id), TargetType.POST).map { inlikes =>
+          Some(post.copy(likes = inlikes))
         }
         case _ => Future.successful(None)
       })
+
+  def getAdminModeratePosts(pageId: Int): Future[Seq[models.Post]] =
+    db.run(posts
+            .filter(_.moderateStatus === models.ModerateStatus.NEED_A_MODERATION)
+            .sortBy(_.id.desc)
+            .drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (AppConstants.DEFAULT_PAGE_SIZE - 1) else 0)
+            .take(AppConstants.DEFAULT_PAGE_SIZE)
+            .result)
+
+  def getAdminModeratePostsPagesCount(): Future[Int] =
+    db.run(posts.filter(_.moderateStatus === models.ModerateStatus.NEED_A_MODERATION).length.result).map { r =>
+      pages(r, AppConstants.DEFAULT_PAGE_SIZE.toInt)
+    }
+
 
   def findLikes(targetIds: Seq[Long], targetType: Int): Future[Seq[models.Like]] = {
     db.run((likes.filter(_.targetId inSet targetIds).filter(_.targetType === targetType).sortBy(_.id.desc) join
@@ -260,22 +290,19 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
     } yield (dbPost, dbAccount, dbLikedOpt)
     db.run(query.result.headOption) map (_.map {
       case (dbPost, dbAccount, dbLikedOpt) =>
-        val post = postFrom(dbPost)
-        post.ownerOpt = Some(dbAccount)
-        post.likedOpt = if (dbLikedOpt.isEmpty) Some(false) else Some(true)
-        post
+        dbPost.copy(
+         ownerOpt = Some(dbAccount),
+         likedOpt = if (dbLikedOpt.isEmpty) Some(false) else Some(true))
     }) flatMap (
       _ match {
-        case Some(post) => findLikes(Seq(post.id), TargetType.POST).map { likes =>
-          post.likes = likes
-          Some(post)
+        case Some(post) => findLikes(Seq(post.id), TargetType.POST).map { inlikes =>
+          Some(post.copy(likes = inlikes))
         }
         case _ => Future.successful(None)
       }) flatMap (
         _ match {
-          case Some(post) => findTagsByTargetId(TargetType.POST, post.id).map { tags =>
-            post.tags = tags
-            Some(post)
+          case Some(post) => findTagsByTargetId(TargetType.POST, post.id).map { intags =>
+            Some(post.copy(tags = intags))
           }
           case _ => Future.successful(None)
         })
@@ -340,18 +367,13 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
     } yield (dbPost, dbLikedOpt, dbAccount)
     db.run(query.result).map(_.map {
       case (dbPost, dbLikedOpt, dbAccount) =>
-        val post = postFrom(dbPost)
-        post.ownerOpt = Some(dbAccount)
-        post.likedOpt = Some(if (dbLikedOpt.isDefined) true else false)
-        post
+        dbPost.copy(ownerOpt = Some(dbAccount), likedOpt = Some(if (dbLikedOpt.isDefined) true else false))
     }) flatMap (posts =>
-      findLikes(posts.map(_.id), TargetType.POST).map { likes =>
-        posts.foreach(post => post.likes = likes.filter(_.targetId == post.id).take(maxLikesView))
-        posts
+      findLikes(posts.map(_.id), TargetType.POST).map { inlikes =>
+        posts.map(post => post.copy(likes = inlikes.filter(_.targetId == post.id).take(maxLikesView)))
       }) flatMap (posts =>
       findTagsByTargetIds(TargetType.POST, posts.map(_.id)).map { touples =>
-        posts.foreach { post => post.tags = touples.filter(_._2 == post.id).map(_._1) }
-        posts
+        posts.map { post => post.copy(tags = touples.filter(_._2 == post.id).map(_._1)) }
       })
   }
 
@@ -367,18 +389,13 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       dbAccount <- accounts.filter(_.id === dbPost.ownerId)
     } yield (dbPost, dbAccount)
     db.run(query.result).map(_.map {
-      case (dbPost, dbAccount) =>
-        val post = postFrom(dbPost)
-        post.ownerOpt = Some(dbAccount)
-        post
+      case (dbPost, dbAccount) => dbPost.copy( ownerOpt = Some(dbAccount) )
     }) flatMap (posts =>
-      findLikes(posts.map(_.id), TargetType.POST).map { likes =>
-        posts.foreach(post => post.likes = likes.filter(_.targetId == post.id).take(maxLikesView))
-        posts
+      findLikes(posts.map(_.id), TargetType.POST).map { inlikes =>
+        posts.map(post => post.copy(likes = inlikes.filter(_.targetId == post.id).take(maxLikesView)))
       }) flatMap (posts =>
       findTagsByTargetIds(TargetType.POST, posts.map(_.id)).map { touples =>
-        posts.foreach { post => post.tags = touples.filter(_._2 == post.id).map(_._1) }
-        posts
+        posts.map { post => post.copy(tags = touples.filter(_._2 == post.id).map(_._1)) }
       })
   }
 
@@ -465,18 +482,13 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
         .take(pageSizeOpt.getOrElse(AppConstants.DEFAULT_PAGE_SIZE))
     } yield (dbPost, dbAccount)
     db.run(query.result).map(_.map {
-      case (dbPost, dbAccount) =>
-        val post = postFrom(dbPost)
-        post.ownerOpt = Some(dbAccount)
-        post
+      case (dbPost, dbAccount) => dbPost.copy(ownerOpt = Some(dbAccount))
     }) flatMap (posts =>
-      findLikes(posts.map(_.id), TargetType.POST).map { likes =>
-        posts.foreach(post => post.likes = likes.filter(_.targetId == post.id).take(maxLikesView))
-        posts
+      findLikes(posts.map(_.id), TargetType.POST).map { inlikes =>
+        posts.map(post => post.copy(likes = inlikes.filter(_.targetId == post.id).take(maxLikesView)))
       }) flatMap (posts =>
       findTagsByTargetIds(TargetType.POST, posts.map(_.id)).map { touples =>
-        posts.foreach { post => post.tags = touples.filter(_._2 == post.id).map(_._1) }
-        posts
+        posts.map { post => post.copy(tags = touples.filter(_._2 == post.id).map(_._1)) }
       })
   }
 
@@ -505,18 +517,15 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
     } yield (dbPost, dbAccount, dbLikeOpt)
     db.run(query.result).map(_.map {
       case (dbPost, dbAccount, dbLikeOpt) =>
-        val post = postFrom(dbPost)
-        post.ownerOpt = Some(dbAccount)
-        post.likedOpt = if (dbLikeOpt.isEmpty) Some(false) else Some(true)
-        post
+        dbPost.copy(
+          ownerOpt = Some(dbAccount),
+          likedOpt = if (dbLikeOpt.isEmpty) Some(false) else Some(true))
     }) flatMap (posts =>
-      findLikes(posts.map(_.id), TargetType.POST).map { likes =>
-        posts.foreach(post => post.likes = likes.filter(_.targetId == post.id).take(maxLikesView))
-        posts
+      findLikes(posts.map(_.id), TargetType.POST).map { inlikes =>
+        posts.map(post => post.copy(likes = inlikes.filter(_.targetId == post.id).take(maxLikesView)))
       }) flatMap (posts =>
       findTagsByTargetIds(TargetType.POST, posts.map(_.id)).map { touples =>
-        posts.foreach { post => post.tags = touples.filter(_._2 == post.id).map(_._1) }
-        posts
+        posts.map { post => post.copy(tags = touples.filter(_._2 == post.id).map(_._1)) }
       })
   }
 
@@ -656,8 +665,8 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
   def findPostById(id: Long): Future[Option[models.Post]] =
     getPostFromQuery(posts.filter(_.id === id))
 
-  def getPostFromQuery(query: Query[(Posts), (DBPost), Seq]): Future[Option[models.Post]] =
-    db.run(query.result.headOption).map(_.map(postFrom))
+  def getPostFromQuery(query: Query[(Posts), (models.Post), Seq]): Future[Option[models.Post]] =
+    db.run(query.result.headOption)
 
   def getAccountFromQuery(query: Query[(Accounts), (models.Account), Seq]): Future[Option[models.Account]] =
     db.run(query.result.headOption)
@@ -672,11 +681,12 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
     content: String,
     thumbnail: Option[String],
     postType: Int,
-    tagNames: Seq[String]): Future[Option[models.Post]] = {
+    tagNames: Seq[String],
+    moderateOption: Boolean): Future[Option[models.Post]] = {
 
     val query = for {
       user <- accounts.filter(_.id === userId).result.head
-      post <- (posts returning posts.map(_.id) into ((v, id) => v.copy(id = id))) += new models.daos.DBPost(
+      post <- (posts returning posts.map(_.id) into ((v, id) => v.copy(id = id))) += models.Post(
         0,
         userId,
         targetIdOpt,
@@ -695,7 +705,8 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
         0,
         0,
         0,
-        0)
+        0,
+        if (moderateOption) models.ModerateStatus.NEED_A_MODERATION else models.ModerateStatus.SUCCESS)
       targetPostsCountOpt <- targetIdOpt match {
         case Some(targetId) =>
           posts.filter(t => t.id === targetId && t.postType === TargetType.PRODUCT)
@@ -715,11 +726,9 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
     } yield actualPost
 
     db.run(query.transactionally) flatMap { dbPost =>
-      getOrCreateTags(tagNames) flatMap { tags =>
-        assignTagsToPost(tags.map(_.id), dbPost.id).map { _ =>
-          val post = postFrom(dbPost)
-          post.tags = tags
-          Some(post)
+      getOrCreateTags(tagNames) flatMap { intags =>
+        assignTagsToPost(intags.map(_.id), dbPost.id).map { _ =>
+          Some(dbPost.copy(tags = intags))
         }
       }
     }
@@ -727,52 +736,6 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
 
   def updatePost(postId: Long, title: String, content: String): Future[Boolean] =
     db.run(posts.filter(_.id === postId).map(post => (post.title, post.content)).update(title, content).transactionally.map(_ > 0))
-
-  def createProductWithPostsCounterUpdate(
-    userId: Long,
-    name: String,
-    about: String,
-    thumbnail: Option[String],
-    tagNames: Seq[String]): Future[Option[models.Post]] = {
-
-    val query = for {
-      user <- accounts.filter(_.id === userId).result.head
-      product <- (posts returning posts.map(_.id) into ((v, id) => v.copy(id = id))) += new models.daos.DBPost(
-        0,
-        userId,
-        None,
-        name,
-        thumbnail,
-        about,
-        models.ContentType.MARKDOWN,
-        TargetType.PRODUCT,
-        models.PostStatus.ACTIVE,
-        0,
-        models.PostStatus.ACTIVE,
-        0,
-        0,
-        0,
-        System.currentTimeMillis,
-        0,
-        0,
-        0,
-        0)
-      _ <- accounts.filter(_.id === userId)
-        .map(t => (t.postsCount, t.postsCounter))
-        .update(user.postsCount + 1, user.postsCounter + 1)
-    } yield product
-
-    db.run(query.transactionally) map (t => Some(postFrom(t)))
-    //    db.run(query.transactionally) flatMap { dbProduct =>
-    //      getOrCreateTags(tagNames) flatMap { tags =>
-    //        assignTagsToPost(tags.map(_.id), dbProduct.id).map { _ =>
-    //          val post = productFrom(dbProduct)
-    //          post.tags = tags
-    //          Some(post)
-    //        }
-    //      }
-    //    }
-  }
 
   def assignTagsToPost(tagsIds: Seq[Long], postId: Long) =
     db.run(DBIO.sequence(tagsIds.map(tagId => tagsToTargets += models.TagToTarget(tagId, postId, TargetType.POST, System.currentTimeMillis))).map(_.sum).transactionally)
@@ -792,7 +755,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       case _ => DBIO.successful(0)
     }
 
-  def udatePostReward(optTx: Option[models.Transaction], post: DBPost, reward: Long, currency: Int): DBIOAction[Int, NoStream, Effect.Write] =
+  def udatePostReward(optTx: Option[models.Transaction], post: models.Post, reward: Long, currency: Int): DBIOAction[Int, NoStream, Effect.Write] =
     optTx match {
       case Some(tx) => posts.filter(_.id === post.id).map(_.reward).update(post.reward + reward)
       case _ => DBIO.successful(0)
@@ -1075,7 +1038,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       dbComment <- comments.filter(_.id === commentId)
       dbPost <- posts.filter(_.id === dbComment.targetId)
     } yield dbPost
-    db.run(query.result.headOption).map(_.map(postFrom))
+    db.run(query.result.headOption)
   }
 
   def createLikeToPostWithLikesCounterUpdate(

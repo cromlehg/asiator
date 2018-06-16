@@ -1,23 +1,18 @@
-package controllers.sside
+package controllers
 
 import scala.concurrent.ExecutionContext
 
 import com.typesafe.config.Config
 
-import controllers.Authorizable
 import javax.inject.Inject
 import javax.inject.Singleton
 import models.PostsFilter
 import models.daos.DAO
 import play.api.mvc.ControllerComponents
-import controllers.AppContext
 import scala.concurrent.ExecutionContext
 
 import com.typesafe.config.Config
 
-import controllers.Authorizable
-import controllers.RegisterCommonAuthorizable
-import controllers.AppContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import models.daos.DAO
@@ -66,8 +61,6 @@ import play.api.mvc.Request
 import play.api.mvc.Result
 import play.twirl.api.Html
 import play.api.mvc.Action
-import controllers.AppConstants
-import controllers.JSONSupport
 import models.ShortOptions
 
 @Singleton
@@ -105,26 +98,33 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
             booleanOptionFold(ShortOptions.ARTICLES_POST_ALLOWED) {
               redirectWithError("Not allowed for now!", articleForm.fill(post))
             } {
-              dao.createPostWithPostsCounterUpdate(
-                account.id,
-                None,
-                post.title,
-                post.content,
-                None,
-                TargetType.ARTICLE,
-                Seq.empty[String]) flatMap { createdPostOpt =>
-                  createdPostOpt match {
-                    case Some(createdPost) =>
-                      future(Redirect(controllers.sside.routes.PostsController.viewPost(createdPost.id))
-                        .flashing("success" -> ("Post successfully created!")))
-                    case _ =>
-                      redirectWithError("Some problems during post creation!", articleForm.fill(post))
-                  }
+              dao.getShortOptionByName(ShortOptions.ARTICLES_PREMODERATION) flatMap {
+                _.fold(future(BadRequest("Not found option for posts moderation"))) { modOpt =>
+                   
+                  dao.createPostWithPostsCounterUpdate(
+                    account.id,
+                    None,
+                    post.title,
+                    post.content,
+                    None,
+                    TargetType.ARTICLE,
+                    Seq.empty[String],
+                    modOpt.toBoolean) flatMap { createdPostOpt =>
+                      createdPostOpt match {
+                        case Some(createdPost) =>
+                          future(Redirect(controllers.routes.PostsController.viewPost(createdPost.id))
+                            .flashing("success" -> ("Post successfully created!")))
+                        case _ =>
+                          redirectWithError("Some problems during post creation!", articleForm.fill(post))
+                      }
+                    }
+
+
                 }
+              }
+
             }
-
-        })
-
+      })
     }
   }
 
@@ -143,7 +143,7 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
             dao.removePost(postId) map { isRemoved =>
               if (isRemoved)
                 request.headers.get("referer")
-                  .fold(Redirect(controllers.sside.routes.AppController.index())) { url => Redirect(url) }
+                  .fold(Redirect(controllers.routes.AppController.index())) { url => Redirect(url) }
               else
                 BadRequest("Couldn't remove post with id " + postId)
             }
@@ -175,7 +175,7 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
                       post.title,
                       post.content) flatMap { result =>
                         if (result)
-                          future(Redirect(controllers.sside.routes.PostsController.viewPost(postId))
+                          future(Redirect(controllers.routes.PostsController.viewPost(postId))
                             .flashing("success" -> ("Post successfully updated!")))
                         else
                           redirectWithError("Some problems during post update!", articleForm.fill(post))
@@ -294,6 +294,46 @@ class PostsController @Inject() (cc: ControllerComponents, dao: DAO, config: Con
 
   private def withAccountNameOrId(f: Long => Future[Result])(implicit request: Request[JsValue], ac: AppContext): Future[Result] =
     withNameOrId("account_id", "login", dao.findAccountIdByLoginOrEmail, f)
+
+  def adminPosts(pageId: Int) = Action.async { implicit request =>
+    implicit val ac = new AppContext()
+    onlyAdmin(a =>
+      dao.getPostsPages() flatMap { pagesCount =>
+        if (pageId > pagesCount)
+          future(Ok(views.html.app.admin.adminPosts(a, Seq(), pageId, pagesCount)))
+        else
+          dao.getPostsPage(pageId) map { posts =>
+            Ok(views.html.app.admin.adminPosts(a, posts, pageId, pagesCount))
+          }
+      })
+  }
+
+  def adminModerationPosts(pageId: Int) = Action.async { implicit request =>
+    implicit val ac = new AppContext()
+    onlyAdmin(a =>
+      dao.getAdminModeratePostsPagesCount() flatMap { pagesCount =>
+        if (pageId > pagesCount)
+          future(Ok(views.html.app.admin.adminModeratePosts(a, Seq(), pageId, pagesCount)))
+        else
+          dao.getAdminModeratePosts(pageId) map { posts =>
+            Ok(views.html.app.admin.adminModeratePosts(a, posts, pageId, pagesCount))
+          }
+      })
+  }
+
+  def moderatePost(postId: Long, moderateStatus: Int) = Action.async { implicit request =>
+    models.ModerateStatus.strById(moderateStatus).fold(future(BadRequest("Wrong moderate status id " + moderateStatus))) { _ =>
+      implicit val ac = new AppContext()
+      onlyAdmin(account =>
+        dao.setModerateStatusToPost(postId, moderateStatus) map { success =>
+          if (success)
+            request.headers.get("referer")
+              .fold(Redirect(controllers.routes.AdminController.admin)) { url => Redirect(url) }
+          else
+            BadRequest("Couldn't set moderate status " + moderateStatus + " for post " + postId)
+        })
+    }
+  }
 
 }
 

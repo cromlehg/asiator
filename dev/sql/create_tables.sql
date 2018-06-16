@@ -65,7 +65,8 @@ CREATE TABLE accounts (
   comments_counter_started  BIGINT UNSIGNED NOT NULL,
   posts_count               BIGINT UNSIGNED NOT NULL,
   about                     VARCHAR(255),
-  account_type              INT UNSIGNED NOT NULL
+  account_type              INT UNSIGNED NOT NULL,
+  moderate_status           INT UNSIGNED NOT NULL
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 
 CREATE TABLE posts (

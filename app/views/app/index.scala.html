@@ -41,14 +41,14 @@
 
 
 @helper.javascriptRouter("jsRoutes")(
-  sside.routes.javascript.PostsController.findPostsByCategory
+  routes.javascript.PostsController.findPostsByCategory
 )
 
 <script type="text/javascript">
   $(document).ready(function(){
 
 	function updateLineWidget(callabck) {  
-	  jsRoutes.controllers.sside.PostsController.findPostsByCategory().ajax({
+	  jsRoutes.controllers.PostsController.findPostsByCategory().ajax({
 	    data: JSON.stringify({page_id: 1, pattern_id: 1, page_size: 4}),
 	    contentType: 'text/json'
 	  }).done(data => {
@@ -60,7 +60,7 @@
 	}
 
 	function updateBigThumbWithVericalWidget(callabck) {
-	  jsRoutes.controllers.sside.PostsController.findPostsByCategory().ajax({
+	  jsRoutes.controllers.PostsController.findPostsByCategory().ajax({
         data: JSON.stringify({page_id: 1, pattern_id: 2, page_size: 5}),
         contentType: 'text/json'
 	  }).done(data => {
@@ -72,7 +72,7 @@
 	}
 
 	function updateListWidget(callabck) {
-      jsRoutes.controllers.sside.PostsController.findPostsByCategory().ajax({
+      jsRoutes.controllers.PostsController.findPostsByCategory().ajax({
         data: JSON.stringify({page_id: 1, pattern_id: 3, page_size: 8}),
 	    contentType: 'text/json'
 	  }).done(data => {

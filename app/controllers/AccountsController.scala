@@ -1,12 +1,9 @@
-package controllers.sside
+package controllers
 
 import scala.concurrent.ExecutionContext
 
 import com.typesafe.config.Config
 
-import controllers.Authorizable
-import controllers.RegisterCommonAuthorizable
-import controllers.AppContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import models.daos.DAO
@@ -55,7 +52,6 @@ import play.api.mvc.Request
 import play.api.mvc.Result
 import play.twirl.api.Html
 import play.api.mvc.Action
-import controllers.AppConstants
 
 @Singleton
 class AccountsController @Inject() (cc: ControllerComponents, dao: DAO, config: Config)(implicit ec: ExecutionContext)
@@ -121,7 +117,7 @@ class AccountsController @Inject() (cc: ControllerComponents, dao: DAO, config: 
 
   def logout = Action.async { implicit request =>
     implicit val ac = new AppContext()
-    super.logout(Redirect(controllers.sside.routes.AccountsController.login()))
+    super.logout(Redirect(controllers.routes.AccountsController.login()))
   }
 
   def processLogin() = Action.async { implicit request =>
@@ -247,6 +243,51 @@ class AccountsController @Inject() (cc: ControllerComponents, dao: DAO, config: 
       })
     }
   }
+
+  def adminAccounts(pageId: Int, filterOpt: Option[String]) = Action.async { implicit request =>
+    if (filterOpt.isDefined && !filterOpt.get.matches("[a-z0-9]{1,}")) {
+      future(request.headers.get("referer")
+        .fold {
+          Redirect(controllers.routes.AccountsController.adminAccounts(1, None))
+            .flashing("error" -> "Search string must contains only a-b or 0-9 symbols!")
+        } { url =>
+          Redirect(url)
+            .flashing("error" -> "Search string must contains only a-b or 0-9 symbols!")
+        })
+    } else {
+      implicit val ac = new AppContext()
+      onlyAdmin(a =>
+        dao.getAccountsPagesCount(filterOpt) flatMap { pagesCount =>
+          if (pageId > pagesCount) future(BadRequest("Page not found " + pageId)) else
+            dao.getAccounts(filterOpt, pageId) map { accounts =>
+              Ok(views.html.app.admin.adminAccounts(
+                a,
+                accounts,
+                pageId,
+                pagesCount,
+                filterOpt))
+            }
+        })
+    }
+  }
+
+  def setAccountStatus(accountId: Long, status: Int) = Action.async { implicit request =>
+    models.AccountStatus.strById(status).fold(future(BadRequest("Wrong status id " + status))) { _ =>
+      implicit val ac = new AppContext()
+      onlyAdmin(account =>
+        dao.setAccountStatus(accountId, status) map { success =>
+          if (success)
+            (request.headers.get("referer")
+              .fold(Redirect(controllers.routes.AppController.index)) { url => Redirect(url) })
+              .flashing("error" -> ("New status has been set for account with id  " + accountId))
+          else
+            (request.headers.get("referer")
+              .fold(Redirect(controllers.routes.AppController.index)) { url => Redirect(url) })
+              .flashing("error" -> ("Can't set new status for account with id " + accountId))
+        })
+    }
+  }
+
 
 }
 

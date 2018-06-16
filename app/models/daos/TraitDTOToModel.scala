@@ -15,26 +15,4 @@ trait TraitDTOToModel {
       dto.reward,
       dto.status)
 
-  def postFrom(dto: DBPost) =
-    new models.Post(
-      dto.id,
-      dto.ownerId,
-      dto.targetId,
-      dto.title,
-      dto.thumbnail,
-      dto.content,
-      dto.contentType,
-      dto.postType,
-      dto.status,
-      dto.promo,
-      dto.typeStatus,
-      dto.likesCount,
-      dto.commentsCount,
-      dto.postsCount,
-      dto.created,
-      dto.viewsCount,
-      dto.reward,
-      dto.rate,
-      dto.rateCount)
-
 }

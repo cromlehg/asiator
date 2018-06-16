@@ -9,10 +9,10 @@
     </button>
     <div class="collapse navbar-collapse" id="navbarCollapse">
       <ul class="navbar-nav mr-auto">
-        @base.common.menuItem(active, models.PostsFilter.MENU_NEW, sside.routes.PostsController.posts(1))
-        @base.common.menuItem(active, models.PostsFilter.MENU_TRENDING, sside.routes.PostsController.postsByFilter(1, models.PostsFilter.TRENDING))
-        @base.common.menuItem(active, models.PostsFilter.MENU_HOT, sside.routes.PostsController.postsByFilter(1, models.PostsFilter.HOT))
-        @base.common.menuItem(active, models.PostsFilter.MENU_PROMOUTED, sside.routes.PostsController.postsByFilter(1, models.PostsFilter.PROMOUTED))
+        @base.common.menuItem(active, models.PostsFilter.MENU_NEW,       routes.PostsController.posts(1))
+        @base.common.menuItem(active, models.PostsFilter.MENU_TRENDING,  routes.PostsController.postsByFilter(1, models.PostsFilter.TRENDING))
+        @base.common.menuItem(active, models.PostsFilter.MENU_HOT,       routes.PostsController.postsByFilter(1, models.PostsFilter.HOT))
+        @base.common.menuItem(active, models.PostsFilter.MENU_PROMOUTED, routes.PostsController.postsByFilter(1, models.PostsFilter.PROMOUTED))
       </ul>
       @headerSearch()
       <ul class="navbar-nav ml-auto">
@@ -22,8 +22,8 @@
               <img src="@ac.authorizedOpt.flatMap(_.avatar).getOrElse("/assets/images/avatar.png")" class="rounded-circle" alt="avatar" width="36" height="36">
             </a>
             <div class="dropdown-menu" aria-labelledby="ibs-register-submenu">
-              <a class="dropdown-item" href="@sside.routes.AccountsController.blog(ac.authorizedOpt.get.id, 1)">Профиль</a>
-              <a class="dropdown-item" href="@sside.routes.PostsController.createPost()">Новый пост</a>
+              <a class="dropdown-item" href="@routes.AccountsController.blog(ac.authorizedOpt.get.id, 1)">Профиль</a>
+              <a class="dropdown-item" href="@routes.PostsController.createPost()">Новый пост</a>
             </div>
           </li>        
         }
@@ -34,11 +34,11 @@
               <span>регистрация</span>
             </a>
             <div class="dropdown-menu" aria-labelledby="ibs-register-submenu">
-              <a class="dropdown-item" href="@sside.routes.AccountsController.registerUser()">Пользователь</a>
-              <a class="dropdown-item" href="@sside.routes.AccountsController.registerCompany()">Компания</a>
+              <a class="dropdown-item" href="@routes.AccountsController.registerUser()">Пользователь</a>
+              <a class="dropdown-item" href="@routes.AccountsController.registerCompany()">Компания</a>
             </div>
           </li>
-          @base.common.menuItem(active, "войти", sside.routes.AccountsController.login(), Some("sign-in-alt"))
+          @base.common.menuItem(active, "войти", routes.AccountsController.login(), Some("sign-in-alt"))
         }
       </ul>
     </div>

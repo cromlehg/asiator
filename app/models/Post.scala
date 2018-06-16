@@ -36,7 +36,7 @@ import controllers.AppContext
 import org.ocpsoft.prettytime.PrettyTime
 import java.util.Date
 
-class Post(
+case class Post(
   val id:            Long,
   val ownerId:       Long,
   val targetId:      Option[Long],
@@ -50,24 +50,18 @@ class Post(
   val typeStatus:    Int,
   val likesCount:    Int,
   val commentsCount: Int,
-  val reviewsCount:  Int,
+  val postsCount:    Int,
   val created:       Long,
   val viewsCount:    Int,
   val reward:        Long,
   val rate:          Int,
-  val rateCount:     Int) extends TraitDateSupports {
-
-  var ownerOpt: Option[Account] = None
-
-  var titleRefOpt: Option[String] = None
-
-  var likedOpt: Option[Boolean] = None
-
-  var tags: Seq[Tag] = Seq.empty
-
-  var likes: Seq[Like] = Seq.empty
-
-  var reviews: Seq[Post] = Seq.empty
+  val rateCount:     Int,
+  val moderateStatus:Int,
+  val ownerOpt:      Option[Account],
+  val titleRefOpt:   Option[String],
+  val likedOpt:      Option[Boolean],
+  val tags:          Seq[Tag],
+  val likes:         Seq[Like]) extends TraitDateSupports {
 
   val pattern = """!\[.*?\]\s*\(\s*(.*?)\s*(\".*?\")?\s*\)""".r
 
@@ -101,7 +95,7 @@ class Post(
       "created" -> created,
       "promo" -> promo,
       "views_count" -> viewsCount,
-      "reviews_count" -> reviewsCount,
+      "moderate_status" -> ModerateStatus.strById(moderateStatus),
       "reward" -> reward,
       "description" -> description,
       "rate" -> { if (rate == 0 || rateCount == 0) 0 else rate / rateCount }.toInt)
@@ -112,12 +106,120 @@ class Post(
     jsObj = thumbnailOpt.fold(jsObj) { t => jsObj ++ Json.obj("thumbnail" -> t) }
     jsObj = if (likes.nonEmpty) jsObj + ("likes" -> JsArray(likes.map(_.toJson))) else jsObj
     jsObj = if (tags.nonEmpty) jsObj + ("tags" -> JsArray(tags.map(_.toJson))) else jsObj
-    jsObj = if (reviews.nonEmpty) jsObj + ("reviews" -> JsArray(reviews.map(_.toJson))) else jsObj
 
     if (!ac.propBool("short")) jsObj ++ Json.obj("compiled_content" -> renderFromMarkdownToHTML) else jsObj
   }
 
 }
+
+object Post {
+  
+  def apply(
+    id:            Long,
+    ownerId:       Long,
+    targetId:      Option[Long],
+    title:         String,
+    thumbnail:     Option[String],
+    content:       String,
+    contentType:   Int,
+    postType:      Int,
+    status:        Int,
+    promo:         Long,
+    typeStatus:    Int,
+    likesCount:    Int,
+    commentsCount: Int,
+    postsCount:    Int,
+    created:       Long,
+    viewsCount:    Int,
+    reward:        Long,
+    rate:          Int,
+    rateCount:     Int,
+    moderateStatus: Int,
+    ownerOpt: Option[Account],
+    titleRefOpt: Option[String],
+    likedOpt: Option[Boolean],
+    tags: Seq[Tag],
+    likes: Seq[Like]): Post =
+      new Post(
+        id,
+        ownerId,
+        targetId,
+        title,
+        thumbnail,
+        content,
+        contentType,
+        postType,
+        status,
+        promo,
+        typeStatus,
+        likesCount,
+        commentsCount,
+        postsCount,
+        created,
+        viewsCount,
+        reward,
+        rate,
+        rateCount,
+        moderateStatus,
+        ownerOpt,
+        titleRefOpt,
+        likedOpt,
+        tags,
+        likes)
+
+
+  def apply(
+    id:            Long,
+    ownerId:       Long,
+    targetId:      Option[Long],
+    title:         String,
+    thumbnail:     Option[String],
+    content:       String,
+    contentType:   Int,
+    postType:      Int,
+    status:        Int,
+    promo:         Long,
+    typeStatus:    Int,
+    likesCount:    Int,
+    commentsCount: Int,
+    postsCount:    Int,
+    created:       Long,
+    viewsCount:    Int,
+    reward:        Long,
+    rate:          Int,
+    rateCount:     Int,
+    moderateStatus: Int): Post =
+      new Post(
+        id,
+        ownerId,
+        targetId,
+        title,
+        thumbnail,
+        content,
+        contentType,
+        postType,
+        status,
+        promo,
+        typeStatus,
+        likesCount,
+        commentsCount,
+        postsCount,
+        created,
+        viewsCount,
+        reward,
+        rate,
+        rateCount,
+        moderateStatus,
+        None,
+        None,
+        None,
+        Seq.empty,
+        Seq.empty)
+
+
+
+}
+
 
 object ContentCompilerHelper {
 

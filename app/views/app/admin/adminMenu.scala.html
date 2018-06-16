@@ -8,13 +8,16 @@
   <div class="collapse navbar-collapse" id="navbarCollapse">
     <ul class="navbar-nav mr-auto">
       @if(ac.authorizedOpt.isDefined) {
-        @base.common.menuItem(active, "stats", sside.routes.AdminController.adminStats())
-        @base.common.menuItem(active, "options", sside.routes.AdminController.adminOptions())
-        @base.common.menuItem(active, "posts", sside.routes.AdminController.adminPosts(1))
-        @base.common.menuItem(active, "accounts", sside.routes.AdminController.adminAccounts(1))
-        @base.common.menuItem(active, "logout", sside.routes.AccountsController.logout())        
+        @if(ac.authorizedOpt.get.isAdmin) {
+          @base.common.menuItem(active, "stats",      routes.AdminController.stats)
+          @base.common.menuItem(active, "options",    routes.OptionsController.options)
+          @base.common.menuItem(active, "posts",      routes.PostsController.adminPosts(1))
+          @base.common.menuItem(active, "moderation", routes.PostsController.adminModerationPosts(1))
+          @base.common.menuItem(active, "accounts",   routes.AccountsController.adminAccounts(1, None))
+        }
+        @base.common.menuItem(active, "logout",   routes.AccountsController.logout)        
       } else {
-        @base.common.menuItem(active, "login", sside.routes.AccountsController.login())
+        @base.common.menuItem(active, "login",    routes.AccountsController.login)
       }
     </ul>
   </div>

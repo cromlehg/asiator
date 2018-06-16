@@ -1,4 +1,4 @@
 @(inForm: Form[_])(implicit flash: Flash, messages: Messages, ac: controllers.AppContext)
 
-@app.common.post(inForm, sside.routes.PostsController.processCreatePost, "Новый пост")
+@app.common.post(inForm, routes.PostsController.processCreatePost, "Новый пост")
 

@@ -5,7 +5,7 @@
     <div class="thumbnail">
       <img src="@post.thumbnailOpt.getOrElse("#")" alt="@post.title" class="figure-img img-fluid rounded main-top-nav-img-1">
       <div class="caption crop">
-        <p><a href="@sside.routes.PostsController.viewPost(post.id)">@post.title</a></p>
+        <p><a href="@routes.PostsController.viewPost(post.id)">@post.title</a></p>
       </div>
       <p>@post.description.substring(0,300) ... </p>
     </div>      

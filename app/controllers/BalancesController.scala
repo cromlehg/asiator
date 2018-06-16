@@ -1,15 +1,13 @@
-package controllers.sside
+package controllers
 
 import scala.concurrent.ExecutionContext
 
 import com.typesafe.config.Config
 
-import controllers.Authorizable
 import javax.inject.Inject
 import javax.inject.Singleton
 import models.daos.DAO
 import play.api.mvc.ControllerComponents
-import controllers.AppContext
 
 @Singleton
 class BalancesController @Inject() (cc: ControllerComponents, dao: DAO, config: Config)(implicit ec: ExecutionContext)

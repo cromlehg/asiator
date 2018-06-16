@@ -9,13 +9,13 @@
   <p>Start with a login. Your login is how you'll be known on @controllers.AppConstants.APP_NAME .</p>
   <p class="mb-5">Next we need to know how to contact you. Your email will be used for further registration steps.</p>
   
-  @b4.form(sside.routes.AccountsController.registerProcessUser) {
+  @b4.form(routes.AccountsController.registerProcessUser) {
     @b4.text( inForm("login"), '_label -> "Username" )
     @b4.text( inForm("email"), '_label -> "Email" )
     @b4.submit('_class -> "mt-5", 'class -> "btn btn-outline-primary btn-block"){ Sign up }   
   }
       
-  <p class="text-secondary mt-5">Do you already have an account? <a href="@sside.routes.AccountsController.login()">Sign in</a></p>
-  <p class="text-secondary">Do want register as company? <a href="@sside.routes.AccountsController.registerCompany()">Sign up</a></p>
+  <p class="text-secondary mt-5">Do you already have an account? <a href="@routes.AccountsController.login()">Sign in</a></p>
+  <p class="text-secondary">Do want register as company? <a href="@routes.AccountsController.registerCompany()">Sign up</a></p>
   
 }

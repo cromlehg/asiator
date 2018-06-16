@@ -1,4 +1,4 @@
-package controllers.sside
+package controllers
 
 import java.io.IOException
 
@@ -33,7 +33,6 @@ import play.api.mvc.ControllerComponents
 import play.api.mvc.Request
 import play.api.mvc.Result
 import models.AccountType
-import controllers.Authorizable
 
 @Singleton
 class TokenChainInterractController @Inject() (cc: ControllerComponents, dao: DAO, config: Config)(implicit ec: ExecutionContext)
