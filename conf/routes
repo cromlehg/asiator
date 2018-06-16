@@ -66,7 +66,7 @@ GET    /app/admin/options                            controllers.OptionsControll
 
 GET    /app/admin/posts/page/:pageId                 controllers.PostsController.adminPosts(pageId: Int)
 
-GET    /app/admin/posts/page/:pageId                 controllers.PostsController.adminModerationPosts(pageId: Int)
+GET    /app/admin/posts/mod/page/:pageId                 controllers.PostsController.adminModerationPosts(pageId: Int)
 
 GET    /app/admin/accounts/page/:pageId                           controllers.AccountsController.adminAccounts(pageId: Int, filter: Option[String])
 
