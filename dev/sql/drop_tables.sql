@@ -34,3 +34,5 @@ DROP TABLE IF EXISTS wallets;
 
 DROP TABLE IF EXISTS short_options;
 
+DROP TABLE IF EXISTS emission;
+

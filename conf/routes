@@ -69,6 +69,8 @@ GET    /app/admin/stats                              controllers.AdminController
 
 GET    /app/admin/options                            controllers.OptionsController.options
 
+GET    /app/admin/emissions                          controllers.EmissionController.emissions
+
 GET    /app/admin/posts/page/:pageId                 controllers.PostsController.adminPosts(pageId: Int)
 
 GET    /app/admin/posts/mod/page/:pageId                 controllers.PostsController.adminModerationPosts(pageId: Int)

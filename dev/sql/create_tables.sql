@@ -168,3 +168,17 @@ CREATE TABLE short_options (
   `type`                    VARCHAR(100) NOT NULL,
   `value`                   VARCHAR(100) NOT NULL
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;  
+
+CREATE TABLE emission (
+  id                        SERIAL PRIMARY KEY,
+  currency_id               INT UNSIGNED NOT NULL,
+  initial_value             INT UNSIGNED NOT NULL,
+  current_value             INT UNSIGNED NOT NULL,
+  percent_rate              INT UNSIGNED NOT NULL,
+  `start`                   INT UNSIGNED NOT NULL,
+  start_percent             INT UNSIGNED NOT NULL,
+  end_percent               INT UNSIGNED NOT NULL,
+  delta_percent             INT UNSIGNED NOT NULL
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;  
+
+

@@ -31,3 +31,5 @@ DELETE FROM balances;
 DELETE FROM positions;
 
 DELETE FROM wallets;
+
+DELETE FROM emission;

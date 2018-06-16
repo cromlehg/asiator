@@ -1,0 +1,18 @@
+@(ems: Seq[models.Emission])(implicit flash: Flash, messages: Messages, ac: controllers.AppContext, req: play.api.mvc.RequestHeader)
+
+@app.admin.adminMain("emissions") { } {
+  @base.common.components.container() {
+   
+    <div class="row">
+    @base.common.components.table(Seq("id", "currency"), ems.map( em => Seq(
+    	em.id, 
+      models.CurrencyType.strById(em.currencyId)
+    	)))
+    </div>
+     
+  }
+} { 
+
+}
+
+

@@ -15,6 +15,7 @@
           @base.common.menuItem(active, "moderation", routes.PostsController.adminModerationPosts(1))
           @base.common.menuItem(active, "charge",     routes.BalancesController.adminCharge)
           @base.common.menuItem(active, "accounts",   routes.AccountsController.adminAccounts(1, None))
+          @base.common.menuItem(active, "emissions",  routes.EmissionController.emissions)
         }
         @base.common.menuItem(active, "logout",   routes.AccountsController.logout)        
       } else {

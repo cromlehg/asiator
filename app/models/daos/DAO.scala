@@ -133,6 +133,9 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
   def setAccountStatus(accountId: Long, status: Int) =
     db.run(accounts.filter(_.id === accountId).map(_.accountStatus).update(status).transactionally).map(_ == 1)
 
+  def getEmissions: Future[Seq[models.Emission]] =
+      db.run(emissions.result)
+
   def getAccounts(filterOpt: Option[String], pageId: Int): Future[Seq[models.Account]] =
     filterOpt.fold {
       db.run(accounts.sortBy(_.id.desc).drop(if (pageId > 0) AppConstants.DEFAULT_PAGE_SIZE * (pageId - 1) else 0).take(AppConstants.DEFAULT_PAGE_SIZE).result)

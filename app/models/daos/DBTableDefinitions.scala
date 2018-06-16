@@ -359,6 +359,41 @@ trait DBTableDefinitions {
 
   val likes = TableQuery[Likes]
 
+ class Emissions(tag: Tag) extends Table[models.Emission](tag, "emission") {
+    def id           = column[Long]("id", O.PrimaryKey, O.AutoInc)
+    def currencyId   = column[Int]("currencyId")
+    def initialValue = column[Long]("initial_value")
+    def currentValue = column[Long]("current_value")
+    def percentRate  = column[Long]("percent_rate")
+    def start        = column[Long]("start")
+    def startPercent = column[Long]("start_percent")
+    def endPercent   = column[Long]("end_percent")
+    def deltaPercent = column[Long]("delta_percent")
+    def * = (
+        id,
+        currencyId,
+        initialValue,
+        currentValue,
+        percentRate,
+        start,
+        startPercent,
+        endPercent,
+        deltaPercent) <> [models.Emission]( t =>
+          models.Emission(t._1, t._2, t._3, t._4, t._5, t._6, t._7, t._8, t._9), t =>
+          Some((
+            t.id,
+            t.currencyId,
+            t.initialValue,
+            t.currentValue,
+            t.percentRate,
+            t.start,
+            t.startPercent,
+            t.endPercent,
+            t.deltaPercent)))
+  }
+
+  val emissions = TableQuery[Emissions]
+
   class Transactions(tag: Tag) extends Table[models.Transaction](tag, "txs") {
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
     def created = column[Long]("created")
