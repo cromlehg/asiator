@@ -85,7 +85,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       case (dbAccount, dbSession) => dbAccount.copy(sessionOpt = Some(dbSession))
     }).flatMap(_ match {
       case Some(account) => fillAccountBalances(account)
-      case _ => Future.successful(None)
+      case _             => future(None)
     })
     updateAccountWithRoles(result)
   }
@@ -235,7 +235,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
         case Some(post) => findLikes(Seq(post.id), TargetType.POST).map { inlikes =>
           Some(post.copy(likes = inlikes))
         }
-        case _ => Future.successful(None)
+        case _ => future(None)
       })
 
   def getAdminModeratePosts(pageId: Int): Future[Seq[models.Post]] =
@@ -298,13 +298,13 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
         case Some(post) => findLikes(Seq(post.id), TargetType.POST).map { inlikes =>
           Some(post.copy(likes = inlikes))
         }
-        case _ => Future.successful(None)
+        case _ => future(None)
       }) flatMap (
         _ match {
           case Some(post) => findTagsByTargetId(TargetType.POST, post.id).map { intags =>
             Some(post.copy(tags = intags))
           }
-          case _ => Future.successful(None)
+          case _ => future(None)
         })
   }
 
@@ -325,7 +325,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
       case (dbAccount, dbSession) => dbAccount.copy(sessionOpt = Some(dbSession))
     }).flatMap(_ match {
       case Some(account) => fillAccountBalances(account)
-      case _ => Future.successful(None)
+      case _             => future(None)
     })
   }
 
@@ -1246,7 +1246,7 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
     db.run(accounts.filter(t => t.login === login && t.confirmCode === code)
       .map(t => (t.confirmCode, t.accountStatus, t.hash))
       .update(None, ConfirmationStatus.CONFIRMED, Some(BCrypt.hashpw(password, BCrypt.gensalt())))).flatMap { raws =>
-      if (raws == 1) findAccountByLogin(login) else Future.successful(None)
+      if (raws == 1) findAccountByLogin(login) else future(None)
     }
 
   def createAccount(
@@ -1318,44 +1318,102 @@ class DAO @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)(imp
     }
   }
 
+  def removeValueFromAccountBalanceDBIOAction(
+    txType:           Int,
+    userId:           Long,
+    amount:           Long,
+    currency:         Int,
+    msg:              Option[String],
+    targetType:         Int,
+    toId:             Option[Long],
+    fromRouteTypeOpt: Option[Int],
+    fromRouteIdOpt:   Option[Long],
+    toRouteTypeOpt:   Option[Int],
+    toRouteIdOpt:     Option[Long]) =
+    for {
+      tx <- (transactions returning transactions.map(_.id) into ((v, id) => Some(v.copy(id = id)))) += models.Transaction(
+        0,
+        System.currentTimeMillis,
+        None,
+        Some(System.currentTimeMillis),
+        TargetType.ACCOUNT,
+        targetType,
+        Some(userId),
+        toId,
+        fromRouteTypeOpt,
+        toRouteTypeOpt,
+        fromRouteIdOpt,
+        toRouteIdOpt,
+        None,
+        None,
+        txType,
+        msg,
+        TxState.APPROVED,
+        currency,
+        -amount)
+      _ <- updateCurrentAccountBalance(userId, currency, amount)
+    } yield tx
+
+
+  def removeValueFromAccountBalance(
+    txType:           Int,
+    userId:           Long,
+    amount:           Long,
+    currency:         Int,
+    msg:              Option[String],
+    fromRouteTypeOpt: Option[Int],
+    fromRouteIdOpt:   Option[Long],
+    toRouteTypeOpt:   Option[Int],
+    toRouteIdOpt:     Option[Long]): Future[Option[models.Transaction]] =
+    db.run(removeValueFromAccountBalanceDBIOAction(
+      txType,
+      userId,
+      amount,
+      currency,
+      msg,
+      TargetType.SYSTEM,
+      None,
+      fromRouteTypeOpt,
+      fromRouteIdOpt,
+      toRouteTypeOpt,
+      toRouteIdOpt).transactionally)
+
+
+  def getCurrentAccountBalanceValue(ownerId: Long, currencyId: Int): Future[Option[Long]] =
+    db.run(filterCurrentAccountBalanceValue(ownerId, currencyId).result.headOption)
+
+  def chargeBalance(accountId: Long, currencyId: Int, value: Long): Future[Option[Long]] = {
+    if(value > 0)
+      addValueToAccountBalance(
+        TxType.CHARGE,
+        accountId,
+        value,
+        currencyId,
+        Some("Charge balance from system"),
+        None,
+        None,
+        None,
+        None) flatMap ( _.fold(future[Option[Long]](None)) { tx =>
+         getCurrentAccountBalanceValue(accountId, currencyId)
+      })
+    else
+      removeValueFromAccountBalance(
+        TxType.CHARGE,
+        accountId,
+        value,
+        currencyId,
+        Some("Remove balance from account to system"),
+        None,
+        None,
+        None,
+        None) flatMap ( _.fold(future[Option[Long]](None)) { tx =>
+         getCurrentAccountBalanceValue(accountId, currencyId)
+      })
+  }
+
+
   def addRolesToAccount(userId: Long, rolesIn: Int*): Future[Unit] =
     db.run(DBIO.seq(roles ++= rolesIn.map(r => models.Role(userId, r))).transactionally)
-
-  ////////////// HELPERS ////////////////
-
-  @inline final def someToSomeFlatMap[T1, T2](f1: Future[Option[T1]], f2: T1 => Future[Option[T2]]): Future[Option[T2]] =
-    f1 flatMap (_ match {
-      case Some(r) => f2(r)
-      case None => Future.successful(None)
-    })
-
-  @inline final def someToSomeFlatMapElse[T](f1: Future[Option[_]], f2: Future[Option[T]]): Future[Option[T]] =
-    f1 flatMap (_ match {
-      case Some(r) => Future.successful(None)
-      case None => f2
-    })
-
-  @inline final def someToBooleanFlatMap[T](f1: Future[Option[T]], f2: T => Future[Boolean]): Future[Boolean] =
-    f1 flatMap (_ match {
-      case Some(r) => f2(r)
-      case None => Future.successful(false)
-    })
-
-  @inline final def someToSeqFlatMap[T1, T2](f1: Future[Option[T1]], f2: T1 => Future[Seq[T2]]): Future[Seq[T2]] =
-    f1 flatMap (_ match {
-      case Some(r) => f2(r)
-      case None => Future.successful(Seq.empty[T2])
-    })
-
-  @inline final def seqToSeqFlatMap[T1, T2](f1: Future[Seq[T1]], f2: T1 => Future[T2]): Future[Seq[T2]] =
-    f1 flatMap { rs =>
-      Future.sequence {
-        rs map { r =>
-          f2(r)
-        }
-      }
-    }
-
 }
 
 

@@ -28,6 +28,8 @@ object TxType {
 
   val REDEEM_REWARD_FROM_CAMPAING = 12
 
+  val CHARGE = 13
+
   def idByStr(str: String): Option[Int] =
     str match {
       case "user to user"                => Some(USER_TO_USER)
@@ -43,6 +45,7 @@ object TxType {
       case "create batch deposit"        => Some(CREATE_BATCH_DEPOSIT)
       case "redeem reward from batch"    => Some(REDEEM_REWARD_FROM_BATCH)
       case "redeem reward from campaing" => Some(REDEEM_REWARD_FROM_CAMPAING)
+      case "charge"                      => Some(CHARGE)
       case _                             => None
     }
 
@@ -61,6 +64,7 @@ object TxType {
       case 10 => Some("create batch deposit")
       case 11 => Some("redeem reward from batch")
       case 12 => Some("redeem reward from campaing")
+      case 13 => Some("charge")
       case _  => None
     }
 

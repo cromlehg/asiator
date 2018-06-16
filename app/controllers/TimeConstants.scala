@@ -18,4 +18,16 @@ object TimeConstants {
 
   val DAY: Long = HOURS_IN_DAY * HOUR
 
+  val DAYS_IN_WEEK: Long = 7L
+
+  val WEEK: Long = DAYS_IN_WEEK * DAY
+
+  val WEEK_IN_MONTH: Long = 4L
+
+  val MONTH: Long = WEEK_IN_MONTH * WEEK
+
+  val MONTH_IN_YEAR: Long = 12L
+
+  val YEAR: Long = MONTH_IN_YEAR * MONTH
+
 }

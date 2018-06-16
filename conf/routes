@@ -58,6 +58,11 @@ POST   /app/register/approve                         controllers.AccountsControl
 POST   /app/posts/find                               controllers.PostsController.findPostsByCategory
 
 
+GET    /app/admin/charge                                        controllers.BalancesController.adminCharge
+
++ nocsrf
+POST   /app/admin/charge                                        controllers.BalancesController.adminChargeProcess
+
 GET    /app/admin                                    controllers.AdminController.admin
 
 GET    /app/admin/stats                              controllers.AdminController.stats
