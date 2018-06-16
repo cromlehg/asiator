@@ -8,14 +8,14 @@ object CurrencyType {
 
   def idByStr(str: String): Option[Int] =
     str match {
-      case "token"  => Some(TOKEN)
+      case "astor"  => Some(TOKEN)
       case "eth"    => Some(ETH)
       case _        => None
     }
 
   def strById(id: Int): Option[String] =
     id match {
-      case 1 => Some("token")
+      case 1 => Some("astor")
       case 2 => Some("eth")
       case _ => None
     }

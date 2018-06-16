@@ -6,7 +6,7 @@
     <div class="row">
     @base.common.components.table(Seq("id", "currency"), ems.map( em => Seq(
     	em.id, 
-      models.CurrencyType.strById(em.currencyId)
+      models.CurrencyType.strById(em.currencyId).get.toUpperCase
     	)))
     </div>
      

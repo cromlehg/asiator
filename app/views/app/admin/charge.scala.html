@@ -11,7 +11,7 @@
   
         @b4.form(routes.BalancesController.adminChargeProcess()) {
           @b4.text( inForm("login"), '_label -> "Login or email" )
-          @b4.select( inForm("currencyId"), options = Seq("1"->"ASIATOR"), '_label -> "Currency", 'readonly -> false )
+          @b4.select( inForm("currencyId"), options = Seq("1"->models.CurrencyType.strById(1).get.toUpperCase), '_label -> "Currency", 'readonly -> false )
           @b4.text( inForm("value"), '_label -> "Amount (delta)" )
           @b4.submit('_class -> "mt-5", 'class -> "btn btn-outline-primary btn-block"){ Send changes }   
         }

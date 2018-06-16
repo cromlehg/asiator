@@ -361,7 +361,7 @@ trait DBTableDefinitions {
 
  class Emissions(tag: Tag) extends Table[models.Emission](tag, "emission") {
     def id           = column[Long]("id", O.PrimaryKey, O.AutoInc)
-    def currencyId   = column[Int]("currencyId")
+    def currencyId   = column[Int]("currency_id")
     def initialValue = column[Long]("initial_value")
     def currentValue = column[Long]("current_value")
     def percentRate  = column[Long]("percent_rate")
